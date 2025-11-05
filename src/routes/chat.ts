@@ -67,6 +67,7 @@ router.get('/characters', async (req: Request, res: Response) => {
         name: definition?.name,
         description: definition?.description,
         display_order: definition?.display_order,
+        avatar_url: definition?.avatar_url,
         config, // Full character config from API (may be null if fetch failed)
       };
     }).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));

@@ -51,6 +51,9 @@ app.use(cors()); // Enable CORS for all origins (customize if needed)
 app.use(express.json()); // Parse JSON request bodies
 app.use(requestLogger); // Log all requests
 
+// Serve static files (images, etc.)
+app.use(express.static('public'));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

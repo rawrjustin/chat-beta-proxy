@@ -10,6 +10,7 @@ export interface CharacterDefinition {
   name?: string;
   description?: string;
   display_order?: number;
+  avatar_url?: string;
   // Add any other metadata you want to expose to frontend
 }
 
@@ -17,28 +18,32 @@ export interface CharacterDefinition {
 // These will be exposed to the frontend via GET /api/characters
 export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
-    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
-    name: 'Woody',
-    description: 'Sheriff Woody Pride',
+    config_id: 'CHAR_PLACEHOLDER_REDFLAG',
+    name: 'Tyler, the Walking Red Flag',
+    description: 'Tyler, the Walking Red Flag',
     display_order: 1,
+    avatar_url: '/images/redflag.png',
   },
   {
     config_id: 'CHAR_7fc3c18a-cdfa-42f3-90f0-443cd013c5e0',
     name: 'Jesus',
     description: 'Jesus',
     display_order: 2,
+    avatar_url: '/images/jesus.png',
   },
   {
     config_id: 'CHAR_d970937b-a512-4e23-9171-618e0db785b1',
     name: 'Bad Santa',
     description: 'Bad Santa',
     display_order: 3,
+    avatar_url: '/images/bad-santa.png',
   },
   {
     config_id: 'CHAR_f0358157-1882-4856-b501-def240a44a06',
     name: 'Mafia Dad',
     description: 'Mafia Dad',
     display_order: 4,
+    avatar_url: '/images/mafia-dad.png',
   },
 ];
 
