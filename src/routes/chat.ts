@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
 import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest } from '../types/chat';
+import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
 
 const router = Router();
 
@@ -26,7 +27,48 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/configs - Get multiple character configs
+// GET /api/characters - Get all available characters with their configs
+router.get('/characters', async (req: Request, res: Response) => {
+  try {
+    const characterDefinitions = getAvailableCharacters();
+    const characterIds = getAvailableCharacterIds();
+
+    if (characterIds.length === 0) {
+      return res.json({
+        characters: [],
+        total: 0
+      });
+    }
+
+    const chatService = getChatService();
+    const charactersWithConfigs = await chatService.getAvailableCharactersWithConfigs(characterIds);
+
+    // Merge with metadata from character definitions
+    const characters = charactersWithConfigs.map(({ config_id, config }) => {
+      const definition = characterDefinitions.find(def => def.config_id === config_id);
+      return {
+        config_id,
+        name: definition?.name,
+        description: definition?.description,
+        display_order: definition?.display_order,
+        config, // Full character config from API
+      };
+    }).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+    res.json({
+      characters,
+      total: characters.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching available characters:', error);
+    res.status(500).json({
+      error: 'Failed to fetch available characters',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/configs - Get multiple character configs (for specific IDs)
 router.post('/configs', async (req: Request, res: Response) => {
   try {
     const { config_ids } = req.body as GetConfigsRequest;

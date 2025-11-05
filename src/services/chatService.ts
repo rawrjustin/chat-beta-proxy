@@ -110,6 +110,22 @@ export class ChatService {
 
     return configMap;
   }
+
+  /**
+   * Get available characters with their full configs
+   * Used to expose available characters to frontend
+   */
+  async getAvailableCharactersWithConfigs(characterIds: string[]): Promise<any[]> {
+    const configs = await this.getConfigs(characterIds);
+    
+    // Return array of characters with their configs
+    return characterIds
+      .map(configId => ({
+        config_id: configId,
+        config: configs[configId] || null,
+      }))
+      .filter(char => char.config !== null);
+  }
 }
 
 // Singleton instance that will be initialized with token refresh service

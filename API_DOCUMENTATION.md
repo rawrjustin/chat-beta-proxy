@@ -68,6 +68,60 @@ console.log(data.status); // "ok"
 
 ---
 
+### Get Available Characters
+
+Get a list of all available characters that the frontend can display to users. The backend defines which characters are available.
+
+**Endpoint:** `GET /api/characters`
+
+**Response:**
+```json
+{
+  "characters": [
+    {
+      "config_id": "CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4",
+      "name": "Woody",
+      "description": "Sheriff Woody Pride",
+      "display_order": 1,
+      "config": {
+        // Full character configuration from API
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+**Response Fields:**
+- `characters` (array) - Array of available characters with their configs
+  - `config_id` (string) - Character configuration ID
+  - `name` (string, optional) - Display name for the character
+  - `description` (string, optional) - Character description
+  - `display_order` (number, optional) - Order for displaying characters
+  - `config` (object) - Full character configuration object
+- `total` (number) - Total number of available characters
+
+**Example:**
+```javascript
+const response = await fetch('http://localhost:3000/api/characters');
+const data = await response.json();
+
+// Display characters to users
+data.characters.forEach(character => {
+  console.log(`${character.name} (${character.config_id})`);
+});
+```
+
+**Error Responses:**
+- `500` - Server error
+
+**Notes:**
+- Characters are sorted by `display_order` (if provided)
+- The backend defines which characters are available in `src/config/characters.ts`
+- You can also set `AVAILABLE_CHARACTERS` environment variable (comma-separated IDs)
+
+---
+
 ### Get Character Config
 
 Retrieve the configuration for a specific character.
@@ -470,6 +524,19 @@ interface GetConfigsResponse {
   retrieved: number;
 }
 
+interface CharacterResponse {
+  config_id: string;
+  name?: string;
+  description?: string;
+  display_order?: number;
+  config: any;  // Full character configuration
+}
+
+interface CharactersResponse {
+  characters: CharacterResponse[];
+  total: number;
+}
+
 interface ErrorResponse {
   error: string;
   message?: string;
@@ -480,12 +547,16 @@ interface ErrorResponse {
 
 ## Frontend Integration Guide
 
-### Fetching Character List Example
+### Fetching Available Characters Example
 
 ```tsx
-// Hook to fetch multiple character configs
-export function useCharacters(configIds: string[]) {
-  const [characters, setCharacters] = useState<Record<string, any>>({});
+import { useState, useEffect, useCallback } from 'react';
+
+const API_BASE = 'http://localhost:3000';
+
+// Hook to fetch available characters from backend
+export function useAvailableCharacters() {
+  const [characters, setCharacters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -494,32 +565,49 @@ export function useCharacters(configIds: string[]) {
     setError(null);
     
     try {
-      const response = await fetch(`${API_BASE}/api/configs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config_ids: configIds })
-      });
+      const response = await fetch(`${API_BASE}/api/characters`);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch characters');
+        throw new Error('Failed to fetch available characters');
       }
 
       const data = await response.json();
-      setCharacters(data.configs);
+      setCharacters(data.characters);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsLoading(false);
     }
-  }, [configIds]);
+  }, []);
 
   useEffect(() => {
-    if (configIds.length > 0) {
-      fetchCharacters();
-    }
+    fetchCharacters();
   }, [fetchCharacters]);
 
   return { characters, isLoading, error, refetch: fetchCharacters };
+}
+
+// Usage in component
+function CharacterSelector() {
+  const { characters, isLoading, error } = useAvailableCharacters();
+
+  if (isLoading) return <div>Loading characters...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <div className="character-selector">
+      <h2>Available Characters</h2>
+      {characters.map((character) => (
+        <div key={character.config_id} className="character-card">
+          <h3>{character.name || character.config_id}</h3>
+          {character.description && <p>{character.description}</p>}
+          <button onClick={() => startChat(character.config_id)}>
+            Chat with {character.name || 'Character'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 }
 ```
 
