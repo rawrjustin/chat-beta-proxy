@@ -1,1 +1,0 @@
-export { TokenDisplay } from './TokenDisplay';

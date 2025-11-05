@@ -19,3 +19,6 @@ npm-debug.log*
 .idea/
 *.swp
 *.swo
+
+# Demo/reference code
+demo/
