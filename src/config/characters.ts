@@ -22,13 +22,24 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Sheriff Woody Pride',
     display_order: 1,
   },
-  // Add more characters here as needed
-  // {
-  //   config_id: 'CHAR_another-character-id',
-  //   name: 'Character Name',
-  //   description: 'Character description',
-  //   display_order: 2,
-  // },
+  {
+    config_id: 'CHAR_7fc3c18a-cdfa-42f3-90f0-443cd013c5e0',
+    name: 'Jesus',
+    description: 'Jesus',
+    display_order: 2,
+  },
+  {
+    config_id: 'CHAR_d970937b-a512-4e23-9171-618e0db785b1',
+    name: 'Bad Santa',
+    description: 'Bad Santa',
+    display_order: 3,
+  },
+  {
+    config_id: 'CHAR_f0358157-1882-4856-b501-def240a44a06',
+    name: 'Mafia Dad',
+    description: 'Mafia Dad',
+    display_order: 4,
+  },
 ];
 
 /**
