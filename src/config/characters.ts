@@ -18,7 +18,7 @@ export interface CharacterDefinition {
 // These will be exposed to the frontend via GET /api/characters
 export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
-    config_id: 'CHAR_PLACEHOLDER_REDFLAG',
+    config_id: 'CHAR_c12ee438-69fc-4c31-8d04-53289358fb72',
     name: 'Tyler, the Walking Red Flag',
     description: 'Tyler, the Walking Red Flag',
     display_order: 1,
