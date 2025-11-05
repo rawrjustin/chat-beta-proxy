@@ -48,14 +48,32 @@ export class TokenRefreshService {
 
     try {
       console.log('Calling token refresh endpoint...');
+      // Try with organizationId if available from token
+      const body: any = {
+        refreshToken: this.refreshToken,
+      };
+      
+      // Extract organizationId from access token if available
+      try {
+        const { jwtDecode } = await import('jwt-decode');
+        const decoded = jwtDecode<{ org_id?: string }>(this.accessToken);
+        if (decoded.org_id) {
+          body.organizationId = decoded.org_id;
+          console.log(`Including organizationId: ${decoded.org_id}`);
+        }
+      } catch (error) {
+        // Ignore if we can't decode token
+        console.warn('Could not extract organizationId from token:', error);
+      }
+      
+      console.log('Refresh request body:', JSON.stringify(body, null, 2));
+
       const response = await fetch(this.refreshUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          refreshToken: this.refreshToken,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
