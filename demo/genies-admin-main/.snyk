@@ -1,0 +1,70 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+# ignores vulnerabilities until expiry date; change duration by modifying expiry date
+ignore:
+  SNYK-UPSTREAM-NODE-6252328:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2024-12-04T09:00:15.422Z
+      created: 2024-03-18T09:00:15.432Z
+  SNYK-UPSTREAM-NODE-6252332:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2024-12-04T09:00:15.422Z
+      created: 2024-03-18T09:00:15.432Z
+  SNYK-DEBIAN11-SYSTEMD-6277510:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2024-12-04T09:00:15.422Z
+      created: 2024-03-18T09:00:15.432Z
+  SNYK-DEBIAN11-PERL-6085272:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2024-12-04T09:00:15.422Z
+      created: 2024-03-18T09:00:15.432Z
+  SNYK-DEBIAN11-KRB5-7411320:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-GNUTLS28-6159417:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-GNUTLS28-6159419:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-E2FSPROGS-2628459:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-KRB5-7411316:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-DB53-2825168:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-21T09:00:15.422Z
+      created: 2024-10-21T09:00:15.432Z
+  SNYK-DEBIAN11-PERL-1925976:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-23T09:00:15.422Z
+      created: 2024-10-23T09:00:15.432Z
+  SNYK-DEBIAN11-PERL-5489191:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-23T09:00:15.422Z
+      created: 2024-10-23T09:00:15.432Z
+  SNYK-DEBIAN11-ZLIB-6008961:
+    - '*':
+      reason: Base image fix required. Can not address it by us
+      expires: 2025-03-23T09:00:15.422Z
+      created: 2024-10-23T09:00:15.432Z
+patch: {}

@@ -1,0 +1,81 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "jest": true,
+    "es6": true
+  },
+  "extends": ["next/core-web-vitals", "react-app", "prettier"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": 2018,
+    "sourceType": "module"
+  },
+  "plugins": ["@typescript-eslint", "react", "jsx-a11y", "jam3"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@chakra-ui/*"],
+            "message": "Please use `src/theme` instead."
+          }
+        ]
+      }
+    ],
+    "no-undef": 1,
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error"],
+    "react/button-has-type": 2,
+    "react/default-props-match-prop-types": 2,
+    "react/jsx-fragments": [1, "element"],
+    "react/no-access-state-in-setstate": 2,
+    "react/no-direct-mutation-state": 2,
+    "react/no-redundant-should-component-update": 1,
+    "react/no-typos": 2,
+    "react/no-string-refs": 2,
+    "react/no-unknown-property": 1,
+    "react/no-unused-state": 1,
+    "react/prefer-stateless-function": 1,
+    "react/self-closing-comp": 1,
+    "react/sort-comp": 1,
+    "jsx-a11y/anchor-is-valid": [
+      "error",
+      {
+        "components": ["Link"],
+        "specialLink": ["hrefLeft", "hrefRight"],
+        "aspects": ["invalidHref", "preferButton"]
+      }
+    ],
+    "react/jsx-curly-brace-presence": [
+      1,
+      {
+        "props": "never",
+        "children": "never"
+      }
+    ],
+    "react/jsx-no-duplicate-props": 1,
+    "react/jsx-no-undef": 2,
+    "react/jsx-uses-vars": 2,
+    "jsx-a11y/alt-text": 1,
+    "jsx-a11y/no-static-element-interactions": 2,
+    "jam3/no-sanitizer-with-danger": [
+      2,
+      {
+        "wrapperName": ["sanitizer", "documentToHtmlString"]
+      }
+    ]
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "globals": {
+    "React": "writable"
+  }
+}

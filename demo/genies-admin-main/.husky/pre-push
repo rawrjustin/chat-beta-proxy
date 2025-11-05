@@ -1,0 +1,7 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Todo: @jietang enable test after test is set up.
+# npm run type-check && npm test
+
+npm run type-check
