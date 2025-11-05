@@ -41,17 +41,33 @@ router.get('/characters', async (req: Request, res: Response) => {
     }
 
     const chatService = getChatService();
-    const charactersWithConfigs = await chatService.getAvailableCharactersWithConfigs(characterIds);
+    
+    // Try to fetch configs, but don't fail if they're unavailable
+    let charactersWithConfigs: Array<{ config_id: string; config: any }> = [];
+    try {
+      charactersWithConfigs = await chatService.getAvailableCharactersWithConfigs(characterIds);
+    } catch (error) {
+      console.error('Warning: Failed to fetch some character configs:', error);
+      // Continue anyway - we'll return characters without configs
+    }
+
+    // Build a map of config_id -> config for quick lookup
+    const configMap = new Map(
+      charactersWithConfigs.map(({ config_id, config }) => [config_id, config])
+    );
 
     // Merge with metadata from character definitions
-    const characters = charactersWithConfigs.map(({ config_id, config }) => {
+    // Return all defined characters, even if config fetch failed
+    const characters = characterIds.map((config_id) => {
       const definition = characterDefinitions.find(def => def.config_id === config_id);
+      const config = configMap.get(config_id) || null;
+      
       return {
         config_id,
         name: definition?.name,
         description: definition?.description,
         display_order: definition?.display_order,
-        config, // Full character config from API
+        config, // Full character config from API (may be null if fetch failed)
       };
     }).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
