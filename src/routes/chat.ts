@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
-import { ProxyChatRequest, CreateSessionRequest } from '../types/chat';
+import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest } from '../types/chat';
 
 const router = Router();
 
@@ -21,6 +21,37 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
     console.error('Error fetching config:', error);
     res.status(500).json({
       error: 'Failed to fetch config',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/configs - Get multiple character configs
+router.post('/configs', async (req: Request, res: Response) => {
+  try {
+    const { config_ids } = req.body as GetConfigsRequest;
+
+    if (!config_ids || !Array.isArray(config_ids) || config_ids.length === 0) {
+      return res.status(400).json({ error: 'config_ids array is required' });
+    }
+
+    // Limit to prevent abuse
+    if (config_ids.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 config IDs allowed per request' });
+    }
+
+    const chatService = getChatService();
+    const configs = await chatService.getConfigs(config_ids);
+
+    res.json({
+      configs,
+      requested: config_ids.length,
+      retrieved: Object.keys(configs).length
+    });
+  } catch (error: any) {
+    console.error('Error fetching configs:', error);
+    res.status(500).json({
+      error: 'Failed to fetch configs',
       message: error.message
     });
   }

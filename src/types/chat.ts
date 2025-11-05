@@ -61,6 +61,23 @@ export interface ConfigResponse {
   [key: string]: any;
 }
 
+export interface CharacterInfo {
+  config_id: string;
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  [key: string]: any;
+}
+
+export interface CharactersListResponse {
+  characters: CharacterInfo[];
+  total?: number;
+}
+
+export interface GetConfigsRequest {
+  config_ids: string[];
+}
+
 // Proxy API request/response types (simplified for frontend)
 export interface ProxyChatRequest {
   session_id: string;

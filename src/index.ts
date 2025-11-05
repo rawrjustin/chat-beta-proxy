@@ -74,6 +74,7 @@ app.listen(PORT, () => {
    Available endpoints:
    - GET  /health
    - GET  /api/config/:configId
+   - POST /api/configs
    - POST /api/sessions
    - POST /api/chat
   `);

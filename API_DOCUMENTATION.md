@@ -99,6 +99,69 @@ const config = await response.json();
 
 ---
 
+### Get Multiple Character Configs
+
+Retrieve configurations for multiple characters at once. This is useful for displaying a list of available characters to users.
+
+**Endpoint:** `POST /api/configs`
+
+**Request Body:**
+```typescript
+{
+  config_ids: string[];  // Required: Array of character configuration IDs (max 50)
+}
+```
+
+**Response:**
+```json
+{
+  "configs": {
+    "CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4": {
+      // Character configuration object
+    },
+    "CHAR_another-id-here": {
+      // Another character configuration
+    }
+  },
+  "requested": 2,
+  "retrieved": 2
+}
+```
+
+**Response Fields:**
+- `configs` (object) - Map of config_id to character configuration
+- `requested` (number) - Number of config IDs requested
+- `retrieved` (number) - Number of configs successfully retrieved
+
+**Example:**
+```javascript
+const response = await fetch('http://localhost:3000/api/configs', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    config_ids: [
+      'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
+      'CHAR_another-character-id'
+    ]
+  })
+});
+
+const data = await response.json();
+console.log('Retrieved configs:', Object.keys(data.configs));
+console.log('Config details:', data.configs);
+```
+
+**Error Responses:**
+- `400` - Invalid request (missing or empty config_ids array, or more than 50 IDs)
+- `500` - Server error
+
+**Notes:**
+- Configs are fetched in parallel for better performance
+- If a config ID doesn't exist, it will be omitted from the response (not cause an error)
+- Maximum 50 config IDs per request to prevent abuse
+
+---
+
 ### Create Chat Session
 
 Create a new chat session for a conversation with a character.
@@ -371,6 +434,10 @@ interface ProxyChatRequest {
   input: string;
   config_id: string;
 }
+
+interface GetConfigsRequest {
+  config_ids: string[];  // Array of character config IDs (max 50)
+}
 ```
 
 ### Response Types
@@ -397,6 +464,12 @@ interface ChatResponse {
   warning_message?: string | null;
 }
 
+interface GetConfigsResponse {
+  configs: Record<string, any>;  // Map of config_id to character config
+  requested: number;
+  retrieved: number;
+}
+
 interface ErrorResponse {
   error: string;
   message?: string;
@@ -406,6 +479,49 @@ interface ErrorResponse {
 ---
 
 ## Frontend Integration Guide
+
+### Fetching Character List Example
+
+```tsx
+// Hook to fetch multiple character configs
+export function useCharacters(configIds: string[]) {
+  const [characters, setCharacters] = useState<Record<string, any>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCharacters = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/configs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config_ids: configIds })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch characters');
+      }
+
+      const data = await response.json();
+      setCharacters(data.configs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [configIds]);
+
+  useEffect(() => {
+    if (configIds.length > 0) {
+      fetchCharacters();
+    }
+  }, [fetchCharacters]);
+
+  return { characters, isLoading, error, refetch: fetchCharacters };
+}
+```
 
 ### React Example
 
