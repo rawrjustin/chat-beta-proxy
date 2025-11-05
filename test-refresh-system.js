@@ -3,7 +3,7 @@ require('dotenv').config();
 const fetch = require('node-fetch');
 const { jwtDecode } = require('jwt-decode');
 
-const TOKEN_REFRESH_URL = process.env.TOKEN_REFRESH_URL || 'https://api.genies.com/auth/v2/refresh-session';
+const TOKEN_REFRESH_URL = process.env.TOKEN_REFRESH_URL || 'https://api.dev.genies.com/auth/v2/refresh-session';
 const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
