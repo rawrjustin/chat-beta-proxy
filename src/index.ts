@@ -13,7 +13,7 @@ const app: Express = express();
 const PORT = process.env.PORT || 3000;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
-const TOKEN_REFRESH_URL = process.env.TOKEN_REFRESH_URL || 'https://api.genies.com/auth/v2/refresh-session';
+const TOKEN_REFRESH_URL = process.env.TOKEN_REFRESH_URL || 'https://api.dev.genies.com/auth/v2/refresh-session';
 const TOKEN_REFRESH_INTERVAL = parseInt(process.env.TOKEN_REFRESH_INTERVAL || '30', 10); // minutes
 
 // Validate required environment variables
