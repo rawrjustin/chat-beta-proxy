@@ -30,15 +30,20 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
 // GET /api/characters - Get all available characters with their configs
 router.get('/characters', async (req: Request, res: Response) => {
   try {
+    // Get character definitions - this is the source of truth for character IDs
     const characterDefinitions = getAvailableCharacters();
-    const characterIds = getAvailableCharacterIds();
-
-    if (characterIds.length === 0) {
+    
+    // Use definitions directly to ensure stable order and IDs
+    // Don't rely on getAvailableCharacterIds() which might have different ordering
+    if (characterDefinitions.length === 0) {
       return res.json({
         characters: [],
         total: 0
       });
     }
+
+    // Extract character IDs from definitions in order
+    const characterIds = characterDefinitions.map(def => def.config_id);
 
     const chatService = getChatService();
     
@@ -58,18 +63,28 @@ router.get('/characters', async (req: Request, res: Response) => {
 
     // Merge with metadata from character definitions
     // Return all defined characters, even if config fetch failed
-    const characters = characterIds.map((config_id) => {
-      const definition = characterDefinitions.find(def => def.config_id === config_id);
+    // IMPORTANT: Always use the config_id from our definitions, never from the upstream config
+    // This ensures character IDs remain stable across deployments and refreshes
+    const characters = characterDefinitions.map((definition) => {
+      const config_id = definition.config_id; // Always use the ID from our definition
       const config = configMap.get(config_id) || null;
       
-      return {
-        config_id,
-        name: definition?.name,
-        description: definition?.description,
-        display_order: definition?.display_order,
-        avatar_url: definition?.avatar_url,
-        config, // Full character config from API (may be null if fetch failed)
+      // Ensure config_id is always from our definition, never from upstream config
+      // This prevents character IDs from changing between deployments/refreshes
+      const character = {
+        config_id, // Always use the hardcoded config_id from our definitions
+        name: definition.name,
+        description: definition.description,
+        display_order: definition.display_order,
+        avatar_url: definition.avatar_url,
+        config: config ? {
+          ...config,
+          // Override any config_id in the nested config to match our definition
+          config_id: config_id
+        } : null, // Full character config from API (may be null if fetch failed)
       };
+      
+      return character;
     }).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
     res.json({

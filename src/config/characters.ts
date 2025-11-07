@@ -50,24 +50,28 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Delusional Sleepy Overmedicated Girl',
     description: 'Delusional Sleepy Overmedicated Girl',
     display_order: 5,
+    avatar_url: '/images/delusional.png',
   },
   {
     config_id: 'CHAR_05d7f0a4-d3e3-4a91-bbc6-b565a6492bba',
     name: 'Gaslighting Ex',
     description: 'Gaslighting Ex',
     display_order: 6,
+    avatar_url: '/images/gaslight ex.png',
   },
   {
     config_id: 'CHAR_e5be91f5-dee3-4130-81dc-b0d2397e201d',
     name: 'Big Brother',
     description: 'Big Brother',
     display_order: 7,
+    avatar_url: '/images/bigbro.png',
   },
   {
     config_id: 'CHAR_20b996c7-642d-48e4-8f10-37eef3ce457b',
     name: 'Yoga Wine Mom',
     description: 'Yoga Wine Mom',
     display_order: 8,
+    avatar_url: '/images/yoga.png',
   },
   {
     config_id: 'CHAR_d7e47bb8-cdf5-4bca-b0b0-eb518a40e79b',
@@ -146,6 +150,8 @@ export function getAvailableCharacterIds(): string[] {
 
 /**
  * Get character definitions (with metadata)
+ * Returns a stable, immutable array of character definitions
+ * Character IDs are guaranteed to remain consistent across deployments and refreshes
  */
 export function getAvailableCharacters(): CharacterDefinition[] {
   const envCharacters = process.env.AVAILABLE_CHARACTERS;
@@ -159,6 +165,7 @@ export function getAvailableCharacters(): CharacterDefinition[] {
   }
   
   // Return hardcoded definitions with metadata
-  return AVAILABLE_CHARACTERS;
+  // Return a copy to ensure immutability and prevent accidental modifications
+  return [...AVAILABLE_CHARACTERS];
 }
 
