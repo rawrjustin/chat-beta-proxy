@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
-import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest } from '../types/chat';
+import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest } from '../types/chat';
 import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
 
 const router = Router();
@@ -169,6 +169,32 @@ router.post('/chat', async (req: Request, res: Response) => {
     console.error('Error sending chat:', error);
     res.status(500).json({
       error: 'Failed to send chat message',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/followups - Generate contextual follow-up options
+router.post('/followups', async (req: Request, res: Response) => {
+  try {
+    const { user_turn, assistant_turn } = req.body as FollowUpsRequest;
+
+    if (!user_turn || !assistant_turn) {
+      return res.status(400).json({
+        error: 'user_turn and assistant_turn are required'
+      });
+    }
+
+    const chatService = getChatService();
+    const followups = await chatService.getFollowUps(user_turn, assistant_turn);
+
+    res.json({
+      followups,
+    });
+  } catch (error: any) {
+    console.error('Error generating follow-ups:', error);
+    res.status(500).json({
+      error: 'Failed to generate follow-ups',
       message: error.message
     });
   }

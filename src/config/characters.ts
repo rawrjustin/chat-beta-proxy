@@ -45,6 +45,84 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 4,
     avatar_url: '/images/mafia-dad.png',
   },
+  {
+    config_id: 'CHAR_f8b803dc-e502-4204-a11a-a7aac5ab05b2',
+    name: 'Delusional Sleepy Overmedicated Girl',
+    description: 'Delusional Sleepy Overmedicated Girl',
+    display_order: 5,
+  },
+  {
+    config_id: 'CHAR_05d7f0a4-d3e3-4a91-bbc6-b565a6492bba',
+    name: 'Gaslighting Ex',
+    description: 'Gaslighting Ex',
+    display_order: 6,
+  },
+  {
+    config_id: 'CHAR_e5be91f5-dee3-4130-81dc-b0d2397e201d',
+    name: 'Big Brother',
+    description: 'Big Brother',
+    display_order: 7,
+  },
+  {
+    config_id: 'CHAR_20b996c7-642d-48e4-8f10-37eef3ce457b',
+    name: 'Yoga Wine Mom',
+    description: 'Yoga Wine Mom',
+    display_order: 8,
+  },
+  {
+    config_id: 'CHAR_d7e47bb8-cdf5-4bca-b0b0-eb518a40e79b',
+    name: 'Pythagoras',
+    description: 'Pythagoras',
+    display_order: 9,
+  },
+  {
+    config_id: 'CHAR_9017bddc-a9fb-438e-ab1a-97bc8b71bc89',
+    name: 'Jay from ENHYPEN',
+    description: 'Jay from ENHYPEN',
+    display_order: 10,
+  },
+  {
+    config_id: 'CHAR_94dff88c-8ea5-400f-96ad-6b4cfe62025a',
+    name: 'Nightwing',
+    description: 'Nightwing',
+    display_order: 11,
+  },
+  {
+    config_id: 'CHAR_4ea65277-124d-4949-8e7e-f2b4cb54061a',
+    name: 'Ghost from COD',
+    description: 'Ghost from COD',
+    display_order: 12,
+  },
+  {
+    config_id: 'CHAR_6b42c735-3294-4e28-b5cf-75306f2413f1',
+    name: 'Johnny Silverhand',
+    description: 'Johnny Silverhand',
+    display_order: 13,
+  },
+  {
+    config_id: 'CHAR_2f1adabf-41ef-48cc-a733-72df367b74da',
+    name: 'Robin',
+    description: 'Robin',
+    display_order: 14,
+  },
+  {
+    config_id: 'CHAR_27949767-0af6-4312-aed0-9cef5ddbdeb3',
+    name: 'Yunjin (LE SSERAFIM)',
+    description: 'Yunjin (LE SSERAFIM)',
+    display_order: 15,
+  },
+  {
+    config_id: 'CHAR_91d73179-f1d5-4163-bfca-3185ebee7594',
+    name: 'Deku',
+    description: 'Deku',
+    display_order: 16,
+  },
+  {
+    config_id: 'CHAR_625009f6-5c79-4ccb-9a2f-80d622367474',
+    name: 'Freddy FNAF',
+    description: 'Freddy FNAF',
+    display_order: 17,
+  },
 ];
 
 /**

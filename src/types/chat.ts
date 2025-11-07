@@ -51,9 +51,11 @@ export interface ChatResponse {
 }
 
 export interface CreateSessionResponse {
-  id: string;
-  status: string;
+  session_id: string;
   config_id: string;
+  user_id: string;
+  session_status: string;
+  updated_at: number;
 }
 
 export interface ConfigResponse {
@@ -91,4 +93,14 @@ export interface ProxyChatResponse {
   request_id?: string;
   text_response_cleaned?: string;
   warning_message?: string;
+}
+
+// Follow-ups API types
+export interface FollowUpsRequest {
+  user_turn: string;
+  assistant_turn: string;
+}
+
+export interface FollowUpsResponse {
+  followups: string[];
 }

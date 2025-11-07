@@ -81,6 +81,7 @@ app.listen(PORT, () => {
    - POST /api/configs
    - POST /api/sessions
    - POST /api/chat
+   - POST /api/followups
   `);
 });
 
