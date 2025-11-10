@@ -12,8 +12,10 @@ import { TokenRefreshService } from './tokenRefreshService';
 
 const BASE_URL = 'https://chat.dev.genies.com';
 const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-4o-mini';
+// Use LLM Gateway API with predefined prompt
 const PREPROMPT_ENDPOINT =
   process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
+const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
@@ -215,7 +217,7 @@ export class ChatService {
   }
 
   /**
-   * Generate contextual pre-prompts via gpt-5-mini using LLM Gateway API
+   * Generate contextual pre-prompts via gpt-4o-mini using LLM Gateway API
    */
   async generatePreprompts(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
     try {
@@ -228,17 +230,27 @@ export class ChatService {
         .filter(Boolean)
         .join('\n\n');
 
-      // Use LLM Gateway API format
-      const fullPrompt = `${PREPROMPT_INSTRUCTION}\n\n${context}`;
-      
-      // Try LLM Gateway API format with model and prompt
+      // Use LLM Gateway API format with predefined prompt_name
+      // The prompt template should handle the instruction formatting
       const payload: any = {
         model: PREPROMPT_MODEL,
-        prompt: fullPrompt,
+        prompt_name: PREPROMPT_NAME,
+        inputs: {
+          user_turn: userTurn,
+          assistant_turn: assistantTurn,
+        },
         temperature: PREPROMPT_TEMPERATURE,
         max_tokens: PREPROMPT_MAX_TOKENS,
         response_format: { type: 'json_object' },
       };
+
+      console.log('[generatePreprompts] Request details:', {
+        endpoint: PREPROMPT_ENDPOINT,
+        model: PREPROMPT_MODEL,
+        payloadKeys: Object.keys(payload),
+        promptLength: fullPrompt.length,
+        hasToken: !!token,
+      });
 
       const response = await fetch(PREPROMPT_ENDPOINT, {
         method: 'POST',
@@ -254,12 +266,20 @@ export class ChatService {
         console.error(`[generatePreprompts] API Error: ${response.status}`, {
           endpoint: PREPROMPT_ENDPOINT,
           model: PREPROMPT_MODEL,
-          error: errorText.substring(0, 200),
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText.substring(0, 500),
+          payload: JSON.stringify(payload).substring(0, 200),
         });
         throw new Error(`Preprompt generation failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('[generatePreprompts] Response received:', {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        responseStructure: JSON.stringify(data).substring(0, 300),
+      });
       
       // LLM Gateway API returns { data: { response: "..." } }
       // Try multiple response formats
@@ -270,7 +290,17 @@ export class ChatService {
         data?.data?.content ??
         null;
 
+      console.log('[generatePreprompts] Extracted content:', {
+        hasContent: !!content,
+        contentType: typeof content,
+        contentLength: typeof content === 'string' ? content.length : 0,
+        contentPreview: typeof content === 'string' ? content.substring(0, 200) : null,
+      });
+
       if (!content || typeof content !== 'string') {
+        console.error('[generatePreprompts] No valid content found in response:', {
+          data: JSON.stringify(data).substring(0, 500),
+        });
         throw new Error('Preprompt generation returned empty content');
       }
 
@@ -278,11 +308,22 @@ export class ChatService {
       try {
         // Content might already be parsed JSON or a string
         parsed = typeof content === 'string' ? JSON.parse(content) : content;
+        console.log('[generatePreprompts] Parsed JSON successfully:', {
+          hasPreprompts: !!parsed?.preprompts,
+          prepromptsCount: parsed?.preprompts?.length || 0,
+        });
       } catch (error) {
+        console.error('[generatePreprompts] JSON parse error:', {
+          error: (error as Error).message,
+          contentPreview: content.substring(0, 500),
+        });
         throw new Error(`Failed to parse preprompt JSON: ${(error as Error).message}`);
       }
 
       if (!parsed?.preprompts || !Array.isArray(parsed.preprompts)) {
+        console.error('[generatePreprompts] Invalid preprompts structure:', {
+          parsed: JSON.stringify(parsed).substring(0, 500),
+        });
         throw new Error('Preprompt payload missing required preprompts array');
       }
 
@@ -296,13 +337,28 @@ export class ChatService {
         )
         .slice(0, 4);
 
+      console.log('[generatePreprompts] Sanitized preprompts:', {
+        originalCount: parsed.preprompts.length,
+        sanitizedCount: sanitized.length,
+        types: sanitized.map(p => p.type),
+      });
+
       if (sanitized.length !== 4) {
+        console.error('[generatePreprompts] Wrong number of preprompts:', {
+          expected: 4,
+          got: sanitized.length,
+          preprompts: JSON.stringify(sanitized),
+        });
         throw new Error('Expected exactly 4 preprompts from generator');
       }
 
+      console.log('[generatePreprompts] Successfully generated preprompts');
       return sanitized;
     } catch (error) {
-      console.error('[generatePreprompts] Falling back to local suggestions:', error);
+      console.error('[generatePreprompts] Falling back to local suggestions:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return this.buildFallbackPreprompts(userTurn, assistantTurn);
     }
   }
