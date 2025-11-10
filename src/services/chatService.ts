@@ -22,9 +22,6 @@ const PREPROMPT_MAX_TOKENS =
   process.env.PREPROMPT_MAX_TOKENS !== undefined
     ? Number(process.env.PREPROMPT_MAX_TOKENS)
     : 400;
-const PREPROMPT_SYSTEM_PROMPT =
-  process.env.PREPROMPT_SYSTEM_PROMPT ||
-  'You return only valid JSON that matches the required schema. Never include extra commentary.';
 
 const PREPROMPT_INSTRUCTION = `
 Generate four short contextual pre-prompts — natural next things a user might say based on the most recent conversation (the last user message and the last AI message).
@@ -53,7 +50,7 @@ Rules:
 
 - Exactly 4 items, in the exact order: first 2 roleplaying/action-driven, next 2 conversational/curiosity-driven.
 
-- short: ≤ 3 words; no emojis; no quotes; only optional “?” allowed.
+- short: ≤ 10 words; no emojis; no quotes; only optional “?” allowed.
 
 - prompt: 1–2 natural sentences expanding the same intent; no emojis.
 
@@ -218,7 +215,7 @@ export class ChatService {
   }
 
   /**
-   * Generate contextual pre-prompts via gpt-5-mini
+   * Generate contextual pre-prompts via gpt-5-mini using LLM Gateway API
    */
   async generatePreprompts(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
     try {
@@ -231,16 +228,20 @@ export class ChatService {
         .filter(Boolean)
         .join('\n\n');
 
-      const payload = {
+      // Use LLM Gateway API format - try OpenAI-style chat completions format
+      const fullPrompt = `${PREPROMPT_INSTRUCTION}\n\n${context}`;
+      
+      // Try OpenAI chat completions format first
+      const payload: any = {
         model: PREPROMPT_MODEL,
         messages: [
           {
             role: 'system',
-            content: PREPROMPT_SYSTEM_PROMPT,
+            content: 'You return only valid JSON that matches the required schema. Never include extra commentary.',
           },
           {
             role: 'user',
-            content: `${PREPROMPT_INSTRUCTION}\n\n${context}`,
+            content: fullPrompt,
           },
         ],
         temperature: PREPROMPT_TEMPERATURE,
@@ -259,14 +260,23 @@ export class ChatService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`[generatePreprompts] API Error: ${response.status}`, {
+          endpoint: PREPROMPT_ENDPOINT,
+          model: PREPROMPT_MODEL,
+          error: errorText.substring(0, 200),
+        });
         throw new Error(`Preprompt generation failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      
+      // LLM Gateway API returns { data: { response: "..." } }
+      // Try multiple response formats
       const content =
         data?.choices?.[0]?.message?.content ??
         data?.data?.response ??
         data?.response ??
+        data?.data?.content ??
         null;
 
       if (!content || typeof content !== 'string') {
@@ -275,7 +285,8 @@ export class ChatService {
 
       let parsed: PrepromptPayload;
       try {
-        parsed = JSON.parse(content);
+        // Content might already be parsed JSON or a string
+        parsed = typeof content === 'string' ? JSON.parse(content) : content;
       } catch (error) {
         throw new Error(`Failed to parse preprompt JSON: ${(error as Error).message}`);
       }
