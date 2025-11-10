@@ -71,12 +71,22 @@ router.get('/characters', async (req: Request, res: Response) => {
       
       // Ensure config_id is always from our definition, never from upstream config
       // This prevents character IDs from changing between deployments/refreshes
+      // Prioritize definition's avatar_url, but fall back to API config's avatar_url if definition doesn't have one
+      const avatar_url = definition.avatar_url || config?.avatar_url || null;
+      
+      // Log avatar_url processing for debugging
+      if (avatar_url) {
+        console.log(`[characters] Character ${definition.name || config_id}: avatar_url=${avatar_url} (from ${definition.avatar_url ? 'definition' : 'API config'})`);
+      } else if (config?.avatar_url) {
+        console.log(`[characters] Character ${definition.name || config_id}: API config has avatar_url=${config.avatar_url} but it's not being used`);
+      }
+      
       const character = {
         config_id, // Always use the hardcoded config_id from our definitions
-        name: definition.name,
-        description: definition.description,
+        name: definition.name || config?.name || null,
+        description: definition.description || config?.description || null,
         display_order: definition.display_order,
-        avatar_url: definition.avatar_url,
+        avatar_url, // Use definition's avatar_url first, fall back to API config's
         config: config ? {
           ...config,
           // Override any config_id in the nested config to match our definition
