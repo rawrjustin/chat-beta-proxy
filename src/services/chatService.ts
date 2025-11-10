@@ -223,15 +223,8 @@ export class ChatService {
     try {
       const token = await this.getValidToken();
 
-      const context = [
-        `Last user message:\n${userTurn}`.trim(),
-        `Last AI message:\n${assistantTurn}`.trim(),
-      ]
-        .filter(Boolean)
-        .join('\n\n');
-
       // Use LLM Gateway API format with predefined prompt_name
-      // The prompt template should handle the instruction formatting
+      // The prompt template 'contextual_followups_v1' should handle the instruction formatting
       const payload: any = {
         model: PREPROMPT_MODEL,
         prompt_name: PREPROMPT_NAME,
@@ -247,8 +240,9 @@ export class ChatService {
       console.log('[generatePreprompts] Request details:', {
         endpoint: PREPROMPT_ENDPOINT,
         model: PREPROMPT_MODEL,
+        prompt_name: PREPROMPT_NAME,
         payloadKeys: Object.keys(payload),
-        promptLength: fullPrompt.length,
+        inputs: payload.inputs,
         hasToken: !!token,
       });
 
