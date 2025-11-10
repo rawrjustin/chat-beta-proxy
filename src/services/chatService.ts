@@ -11,9 +11,9 @@ import {
 import { TokenRefreshService } from './tokenRefreshService';
 
 const BASE_URL = 'https://chat.dev.genies.com';
-const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-5-mini';
+const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-4o-mini';
 const PREPROMPT_ENDPOINT =
-  process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/chat/completions`;
+  process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
@@ -228,22 +228,13 @@ export class ChatService {
         .filter(Boolean)
         .join('\n\n');
 
-      // Use LLM Gateway API format - try OpenAI-style chat completions format
+      // Use LLM Gateway API format
       const fullPrompt = `${PREPROMPT_INSTRUCTION}\n\n${context}`;
       
-      // Try OpenAI chat completions format first
+      // Try LLM Gateway API format with model and prompt
       const payload: any = {
         model: PREPROMPT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You return only valid JSON that matches the required schema. Never include extra commentary.',
-          },
-          {
-            role: 'user',
-            content: fullPrompt,
-          },
-        ],
+        prompt: fullPrompt,
         temperature: PREPROMPT_TEMPERATURE,
         max_tokens: PREPROMPT_MAX_TOKENS,
         response_format: { type: 'json_object' },
