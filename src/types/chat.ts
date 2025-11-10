@@ -50,6 +50,18 @@ export interface ChatResponse {
   warning_message?: string;
 }
 
+export type PrepromptType = 'roleplay' | 'conversation';
+
+export interface Preprompt {
+  type: PrepromptType;
+  prompt: string;
+  simplified_text: string;
+}
+
+export interface PrepromptPayload {
+  preprompts: Preprompt[];
+}
+
 export interface CreateSessionResponse {
   session_id: string;
   config_id: string;
@@ -93,6 +105,7 @@ export interface ProxyChatResponse {
   request_id?: string;
   text_response_cleaned?: string;
   warning_message?: string;
+  preprompts?: Preprompt[];
 }
 
 // Follow-ups API types
@@ -102,5 +115,5 @@ export interface FollowUpsRequest {
 }
 
 export interface FollowUpsResponse {
-  followups: string[];
+  preprompts: Preprompt[];
 }

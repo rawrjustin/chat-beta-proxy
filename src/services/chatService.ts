@@ -4,11 +4,101 @@ import {
   ChatResponse,
   CreateSessionRequest,
   CreateSessionResponse,
-  ConfigResponse
+  ConfigResponse,
+  Preprompt,
+  PrepromptPayload
 } from '../types/chat';
 import { TokenRefreshService } from './tokenRefreshService';
 
 const BASE_URL = 'https://chat.dev.genies.com';
+const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-5-mini';
+const PREPROMPT_ENDPOINT =
+  process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/chat/completions`;
+const PREPROMPT_TEMPERATURE =
+  process.env.PREPROMPT_TEMPERATURE !== undefined
+    ? Number(process.env.PREPROMPT_TEMPERATURE)
+    : 0.7;
+const PREPROMPT_MAX_TOKENS =
+  process.env.PREPROMPT_MAX_TOKENS !== undefined
+    ? Number(process.env.PREPROMPT_MAX_TOKENS)
+    : 400;
+const PREPROMPT_SYSTEM_PROMPT =
+  process.env.PREPROMPT_SYSTEM_PROMPT ||
+  'You return only valid JSON that matches the required schema. Never include extra commentary.';
+
+const PREPROMPT_INSTRUCTION = `
+Generate four short contextual pre-prompts — natural next things a user might say based on the most recent conversation (the last user message and the last AI message).
+
+STRICT OUTPUT:
+
+Return ONLY valid JSON exactly in this shape and order:
+
+{
+
+  "preprompts": [
+
+    {"type": "roleplay", "prompt": "Full preprompt text 1", "simplified_text": "Short version"},
+
+      {"type": "roleplay", "prompt": "Full preprompt text 2", "simplified_text": "Short version"},
+
+      {"type": "conversation", "prompt": "Full preprompt text 3", "simplified_text": "Short version"},
+
+      {"type": "conversation", "prompt": "Full preprompt text 4", "simplified_text": "Short version"}
+
+  ]
+
+}
+
+Rules:
+
+- Exactly 4 items, in the exact order: first 2 roleplaying/action-driven, next 2 conversational/curiosity-driven.
+
+- short: ≤ 3 words; no emojis; no quotes; only optional “?” allowed.
+
+- prompt: 1–2 natural sentences expanding the same intent; no emojis.
+
+- No extra fields, text, or comments outside the JSON.
+
+- Each option must point to a distinct emotion or next beat (e.g., bold vs cautious, intrigued vs skeptical).
+
+- Match the character’s voice and current context; avoid generic filler like “continue” or “tell me more.”
+
+Tone:
+
+- Feels like 2 AM TikTok/YouTube rabbit hole: casual, curious, impulsive, emotionally distinct.
+
+Type definitions & examples (for style only; DO NOT include these in output):
+
+ROLEPLAY / ACTION (first two):
+
+  Example A:
+
+    short: "peek around the corner"
+
+    prompt: "You edge closer and carefully peek around the corner to see what’s making the sound."
+
+  Example B:
+
+    short: "grab the flashlight"
+
+    prompt: "You snatch the flashlight and sweep the beam across the room, checking every shadow."
+
+CONVERSATIONAL / CURIOSITY (last two):
+
+  Example C:
+
+    short: "is that actually true?"
+
+    prompt: "Wait—seriously? Is that actually true, or am I missing context?"
+
+  Example D:
+
+    short: "why would that work?"
+
+    prompt: "That’s surprising—can you explain why that would work in this situation?"
+
+Return only the JSON object in the required order and shape.
+`.trim();
 
 export class ChatService {
   private tokenRefreshService: TokenRefreshService | null = null;
@@ -128,87 +218,126 @@ export class ChatService {
   }
 
   /**
-   * Call LLM Gateway API to generate contextual follow-ups
+   * Generate contextual pre-prompts via gpt-5-mini
    */
-  async getFollowUps(userTurn: string, assistantTurn: string): Promise<string[]> {
+  async generatePreprompts(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
     try {
       const token = await this.getValidToken();
 
+      const context = [
+        `Last user message:\n${userTurn}`.trim(),
+        `Last AI message:\n${assistantTurn}`.trim(),
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
       const payload = {
-        prompt_name: 'contextual_followups_v1',
-        inputs: {
-          user_turn: userTurn,
-          assistant_turn: assistantTurn,
-        },
+        model: PREPROMPT_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: PREPROMPT_SYSTEM_PROMPT,
+          },
+          {
+            role: 'user',
+            content: `${PREPROMPT_INSTRUCTION}\n\n${context}`,
+          },
+        ],
+        temperature: PREPROMPT_TEMPERATURE,
+        max_tokens: PREPROMPT_MAX_TOKENS,
+        response_format: { type: 'json_object' },
       };
 
-      const options: any = {
+      const response = await fetch(PREPROMPT_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
-      };
-
-      const response = await fetch('https://chat.dev.genies.com/v1/llm/infer', options);
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`LLM Gateway request failed: ${response.status} ${errorText}`);
+        throw new Error(`Preprompt generation failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      const content =
+        data?.choices?.[0]?.message?.content ??
+        data?.data?.response ??
+        data?.response ??
+        null;
 
-      // Extract the response from the API
-      // The API returns { data: { response: "..." } }
-      // The response should be a string with 4 follow-up options
-      // We'll parse it and return as an array
-      const followUpsText = data?.data?.response || '';
-      
-      // Parse the response - it might be a single string with 4 options
-      // Try to split by newlines or common separators
-      // If it's already formatted, return as array; otherwise split intelligently
-      let followups: string[] = [];
-      
-      if (typeof followUpsText === 'string') {
-        // Try splitting by newlines first
-        followups = followUpsText
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0)
-          .filter(line => {
-            // Remove common list markers (1., 2., -, *, etc.)
-            return !/^[\d\-\*\.\)]\s*$/.test(line);
-          })
-          .map(line => {
-            // Remove leading numbers, dashes, or bullets
-            return line.replace(/^[\d\-\*\.\)]\s+/, '').trim();
-          });
-        
-        // If we got less than 4, try splitting by other patterns
-        if (followups.length < 4) {
-          // Try splitting by common separators
-          const alternatives = followUpsText.split(/[|;]/).map(s => s.trim()).filter(s => s.length > 0);
-          if (alternatives.length >= followups.length) {
-            followups = alternatives;
-          }
-        }
-        
-        // Ensure we have exactly 4 options (pad or truncate if needed)
-        if (followups.length > 4) {
-          followups = followups.slice(0, 4);
-        } else if (followups.length < 4 && followups.length > 0) {
-          // If we have fewer than 4, the API might return them differently
-          // Just return what we have
-        }
+      if (!content || typeof content !== 'string') {
+        throw new Error('Preprompt generation returned empty content');
       }
 
-      return followups.length > 0 ? followups : [followUpsText];
+      let parsed: PrepromptPayload;
+      try {
+        parsed = JSON.parse(content);
+      } catch (error) {
+        throw new Error(`Failed to parse preprompt JSON: ${(error as Error).message}`);
+      }
+
+      if (!parsed?.preprompts || !Array.isArray(parsed.preprompts)) {
+        throw new Error('Preprompt payload missing required preprompts array');
+      }
+
+      const sanitized = parsed.preprompts
+        .filter(
+          (item): item is Preprompt =>
+            item != null &&
+            (item.type === 'roleplay' || item.type === 'conversation') &&
+            typeof item.prompt === 'string' &&
+            typeof item.simplified_text === 'string'
+        )
+        .slice(0, 4);
+
+      if (sanitized.length !== 4) {
+        throw new Error('Expected exactly 4 preprompts from generator');
+      }
+
+      return sanitized;
     } catch (error) {
-      console.error('[getFollowUps]:', error);
-      throw error;
+      console.error('[generatePreprompts] Falling back to local suggestions:', error);
+      return this.buildFallbackPreprompts(userTurn, assistantTurn);
     }
+  }
+
+  /**
+   * Call LLM Gateway API to generate contextual follow-ups
+   */
+  async getFollowUps(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
+    return this.generatePreprompts(userTurn, assistantTurn);
+  }
+
+  private buildFallbackPreprompts(userTurn: string, assistantTurn: string): Preprompt[] {
+    const lastUser = userTurn?.trim() || 'the last thing you said';
+    const lastAssistant = assistantTurn?.trim() || 'that last reply';
+
+    return [
+      {
+        type: 'roleplay',
+        prompt: `You ride the rush from ${lastAssistant.toLowerCase()} and dare them to notch the energy even higher.`,
+        simplified_text: 'go bigger',
+      },
+      {
+        type: 'roleplay',
+        prompt: `You pivot fast, acting on instinct, and tease a wild next move based on how you felt when you said "${lastUser}".`,
+        simplified_text: 'switch lanes',
+      },
+      {
+        type: 'conversation',
+        prompt: `Hold up—that response has you curious. Ask directly what surprised them most about ${lastAssistant.toLowerCase()}.`,
+        simplified_text: 'wait really?',
+      },
+      {
+        type: 'conversation',
+        prompt: `Stay up late brain: press them for the why behind it all, keeping the mood casual but insistent.`,
+        simplified_text: 'tell me why',
+      },
+    ];
   }
 }
 

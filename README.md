@@ -117,7 +117,7 @@ Sends a message to the chat API and receives AI response.
 ```
 POST /api/followups
 ```
-Generates 4 contextual follow-up options based on the last user message and AI response.
+Generates 4 contextual pre-prompts (two roleplay, two conversation) based on the last user message and AI response.
 
 **Request body:**
 ```json
@@ -130,11 +130,27 @@ Generates 4 contextual follow-up options based on the last user message and AI r
 **Response:**
 ```json
 {
-  "followups": [
-    "Tell me more about yourself",
-    "What can you help me with?",
-    "What's your favorite topic?",
-    "Do you have any recommendations?"
+  "preprompts": [
+    {
+      "type": "roleplay",
+      "prompt": "You lean in with a grin, daring them to dish the weirdest fact about their day.",
+      "simplified_text": "spill the weird"
+    },
+    {
+      "type": "roleplay",
+      "prompt": "You clap once, ready for action, and tell them you’re about to throw a curveball of a request.",
+      "simplified_text": "hit me wild"
+    },
+    {
+      "type": "conversation",
+      "prompt": "Okay, now I’m curious—what do you actually love helping people with the most?",
+      "simplified_text": "what’s your thing?"
+    },
+    {
+      "type": "conversation",
+      "prompt": "Hold on, so what happens if I just keep asking you for spicier story ideas?",
+      "simplified_text": "spicier ideas?"
+    }
   ]
 }
 ```

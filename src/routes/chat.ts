@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
-import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest } from '../types/chat';
+import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt } from '../types/chat';
 import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
 
 const router = Router();
@@ -172,6 +172,18 @@ router.post('/chat', async (req: Request, res: Response) => {
       config_id,
     });
 
+    let preprompts: Preprompt[] | undefined;
+    try {
+      if (input && (response.ai || response.text_response_cleaned)) {
+        preprompts = await chatService.generatePreprompts(
+          input,
+          response.text_response_cleaned || response.ai || ''
+        );
+      }
+    } catch (error) {
+      console.error('Warning: Failed to generate preprompts for chat response:', error);
+    }
+
     // Return simplified response to frontend
     res.json({
       ai: response.ai,
@@ -179,6 +191,7 @@ router.post('/chat', async (req: Request, res: Response) => {
       request_id: response.request_id,
       text_response_cleaned: response.text_response_cleaned,
       warning_message: response.warning_message,
+      preprompts,
     });
   } catch (error: any) {
     console.error('Error sending chat:', error);
@@ -201,10 +214,10 @@ router.post('/followups', async (req: Request, res: Response) => {
     }
 
     const chatService = getChatService();
-    const followups = await chatService.getFollowUps(user_turn, assistant_turn);
+    const preprompts = await chatService.getFollowUps(user_turn, assistant_turn);
 
     res.json({
-      followups,
+      preprompts,
     });
   } catch (error: any) {
     console.error('Error generating follow-ups:', error);
