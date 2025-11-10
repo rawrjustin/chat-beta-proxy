@@ -298,10 +298,26 @@ export class ChatService {
         throw new Error('Preprompt generation returned empty content');
       }
 
+      // Strip markdown code blocks if present (e.g., ```json ... ```)
+      let cleanedContent = content.trim();
+      const hadCodeBlock = cleanedContent.startsWith('```');
+      if (hadCodeBlock) {
+        // Remove opening code block marker (```json, ```, etc.)
+        cleanedContent = cleanedContent.replace(/^```[a-z]*\n?/i, '');
+        // Remove closing code block marker
+        cleanedContent = cleanedContent.replace(/\n?```\s*$/i, '');
+        cleanedContent = cleanedContent.trim();
+        console.log('[generatePreprompts] Stripped markdown code blocks:', {
+          originalLength: content.length,
+          cleanedLength: cleanedContent.length,
+          cleanedPreview: cleanedContent.substring(0, 200),
+        });
+      }
+
       let parsed: PrepromptPayload;
       try {
-        // Content might already be parsed JSON or a string
-        parsed = typeof content === 'string' ? JSON.parse(content) : content;
+        // Parse the cleaned JSON content
+        parsed = typeof cleanedContent === 'string' ? JSON.parse(cleanedContent) : cleanedContent;
         console.log('[generatePreprompts] Parsed JSON successfully:', {
           hasPreprompts: !!parsed?.preprompts,
           prepromptsCount: parsed?.preprompts?.length || 0,
