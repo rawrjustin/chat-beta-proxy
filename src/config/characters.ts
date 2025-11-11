@@ -127,6 +127,18 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Freddy FNAF',
     display_order: 17,
   },
+  {
+    config_id: 'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
+    name: 'Shawn Mendes',
+    description: 'Shawn Mendes',
+    display_order: 18,
+  },
+  {
+    config_id: 'CHAR_115ca055-9c2b-4b9a-8be8-2b9b94246bee',
+    name: 'Jake Paul',
+    description: 'Jake Paul',
+    display_order: 19,
+  },
 ];
 
 /**
