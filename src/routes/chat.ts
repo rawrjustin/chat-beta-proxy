@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
 import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt } from '../types/chat';
 import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
+import { stripCurlyBracketTags } from '../utils/textUtils';
 
 const router = Router();
 
@@ -194,12 +195,16 @@ router.post('/chat', async (req: Request, res: Response) => {
       console.error('Warning: Failed to generate preprompts for chat response:', error);
     }
 
+    // Strip curly bracket tags from response text before returning to frontend
+    const cleanedAi = stripCurlyBracketTags(response.ai);
+    const cleanedTextResponse = stripCurlyBracketTags(response.text_response_cleaned);
+
     // Return simplified response to frontend
     res.json({
-      ai: response.ai,
+      ai: cleanedAi,
       session_id: response.session.id,
       request_id: response.request_id,
-      text_response_cleaned: response.text_response_cleaned,
+      text_response_cleaned: cleanedTextResponse,
       warning_message: response.warning_message,
       preprompts,
     });
