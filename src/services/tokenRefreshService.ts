@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { isTokenExpired, getTokenExpiryTime } from '../utils/tokenUtils';
+import { isTokenExpired, getTokenExpiryTime, getUserFromToken } from '../utils/tokenUtils';
 
 interface RefreshTokenResponse {
   accessToken: string;
@@ -97,6 +97,14 @@ export class TokenRefreshService {
 
       console.log('✅ Token refreshed successfully');
 
+      // Extract and log user_id from the new token
+      const userInfo = getUserFromToken(this.accessToken);
+      if (userInfo?.userId) {
+        console.log(`User ID: ${userInfo.userId}`);
+      } else {
+        console.warn('Could not extract user_id from refreshed token');
+      }
+
       // Notify callback if provided
       if (this.onTokenRefreshed) {
         this.onTokenRefreshed(this.accessToken, this.refreshToken);
@@ -180,5 +188,22 @@ export class TokenRefreshService {
   updateTokens(accessToken: string, refreshToken: string): void {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
+  }
+
+  /**
+   * Get user ID from the current access token
+   */
+  getUserId(): string | null {
+    const userInfo = getUserFromToken(this.accessToken);
+    return userInfo?.userId || null;
+  }
+
+  /**
+   * Get user ID from a valid (possibly refreshed) access token
+   */
+  async getUserIdFromValidToken(): Promise<string | null> {
+    const token = await this.getValidAccessToken();
+    const userInfo = getUserFromToken(token);
+    return userInfo?.userId || null;
   }
 }

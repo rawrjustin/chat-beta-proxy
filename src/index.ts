@@ -5,6 +5,7 @@ import chatRoutes from './routes/chat';
 import { requestLogger, errorHandler } from './middleware/logger';
 import { initChatService } from './services/chatService';
 import { TokenRefreshService } from './services/tokenRefreshService';
+import { getUserFromToken } from './utils/tokenUtils';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,14 @@ const tokenRefreshService = new TokenRefreshService(
     // Note: In production, you might want to persist these to a database or file
   }
 );
+
+// Log user_id from initial token
+const userInfo = getUserFromToken(AUTH_TOKEN);
+if (userInfo?.userId) {
+  console.log(`User ID: ${userInfo.userId}`);
+} else {
+  console.warn('Could not extract user_id from initial token');
+}
 
 // Start periodic token refresh (every 30 minutes by default)
 if (REFRESH_TOKEN) {
