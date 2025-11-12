@@ -145,6 +145,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Zoro from One Piece',
     display_order: 20,
   },
+  {
+    config_id: 'CHAR_33b6efd3-40ef-4dd1-a319-42a8515b5a8e',
+    name: 'Aggretsuko',
+    description: 'Learn to Rage with Aggretsuko',
+    display_order: 21,
+    avatar_url: '/images/aggretsuko.jpg',
+  },
 ];
 
 /**
