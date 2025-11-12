@@ -1,6 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import chatRoutes from './routes/chat';
 import { requestLogger, errorHandler } from './middleware/logger';
 import { initChatService } from './services/chatService';
@@ -15,7 +16,10 @@ const PORT = process.env.PORT || 3000;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
 const TOKEN_REFRESH_URL = process.env.TOKEN_REFRESH_URL || 'https://api.dev.genies.com/auth/v2/refresh-session';
-const TOKEN_REFRESH_INTERVAL = parseInt(process.env.TOKEN_REFRESH_INTERVAL || '30', 10); // minutes
+// Token refresh interval: Set to 25 minutes for 60-minute TTL tokens
+// This ensures we refresh well before the 5-minute expiration buffer
+// Formula: (TTL - buffer) / 2 = (60 - 5) / 2 ≈ 25-30 minutes
+const TOKEN_REFRESH_INTERVAL = parseInt(process.env.TOKEN_REFRESH_INTERVAL || '25', 10); // minutes
 
 // Validate required environment variables
 if (!AUTH_TOKEN) {
@@ -61,7 +65,12 @@ app.use(express.json()); // Parse JSON request bodies
 app.use(requestLogger); // Log all requests
 
 // Serve static files (images, etc.)
-app.use(express.static('public'));
+// Use absolute path that works in both development and production
+// In dev: __dirname is src/, so ../public resolves to project root/public
+// In prod: __dirname is dist/, so ../public resolves to project root/public
+const publicPath = path.join(__dirname, '..', 'public');
+console.log(`📁 Serving static files from: ${publicPath}`);
+app.use(express.static(publicPath));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
