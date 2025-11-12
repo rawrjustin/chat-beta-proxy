@@ -356,9 +356,17 @@ Get the character's initial greeting message when entering a chat room. This end
 ```typescript
 {
   session_id: string;  // Required: Session ID (can be existing or newly created)
-  config_id: string;    // Required: Character configuration ID
+  config_id: string;   // Required: Character configuration ID
+  previous_messages?: Array<{  // Optional: Previous conversation messages
+    role: 'user' | 'ai';
+    content: string;
+  }>;
 }
 ```
+
+**Behavior:**
+- **New Chat** (no `previous_messages` or empty array): Sends "I just walked in on you, greet me and tell me your current scenario"
+- **Returning User** (with `previous_messages`): Sends a message acknowledging the user's return and includes the conversation history
 
 **Response:**
 ```json
@@ -386,15 +394,16 @@ Get the character's initial greeting message when entering a chat room. This end
 - `warning_message` (string, optional) - Any warning messages
 - `preprompts` (array, optional) - Suggested follow-up prompts
 
-**Example:**
+**Example - New Chat:**
 ```javascript
-// When user enters a chat room, call this endpoint
+// When user enters a new chat room (no previous messages)
 const response = await fetch('http://localhost:3000/api/initial-message', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
     config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4'
+    // No previous_messages - this is a new chat
   })
 });
 
@@ -403,7 +412,34 @@ const initialMessage = await response.json();
 // Show loading spinner while waiting for this response
 ```
 
-**Note:** This endpoint sends an invisible message ("I just walked in on you, greet me and tell me your current scenario") to the character. The user never sees this message - only the character's response is returned and should be displayed.
+**Example - Returning User:**
+```javascript
+// When user returns to an existing chat (has previous messages)
+const previousMessages = [
+  { role: 'user', content: 'Hello, how are you?' },
+  { role: 'ai', content: 'I\'m doing great! How about you?' },
+  { role: 'user', content: 'I\'m good too, thanks!' }
+];
+
+const response = await fetch('http://localhost:3000/api/initial-message', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
+    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
+    previous_messages: previousMessages  // Include previous conversation
+  })
+});
+
+const initialMessage = await response.json();
+// Display initialMessage.ai as the greeting message acknowledging the return
+// Show loading spinner while waiting for this response
+```
+
+**Note:** 
+- For **new chats**, this endpoint sends an invisible message ("I just walked in on you, greet me and tell me your current scenario") to the character.
+- For **returning users**, it sends a message acknowledging their return and includes the conversation history.
+- The user never sees these invisible messages - only the character's response is returned and should be displayed.
 
 **Error Responses:**
 - `400` - Missing required fields: `session_id` or `config_id`

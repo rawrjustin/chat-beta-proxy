@@ -265,7 +265,15 @@ router.post('/chat', async (req: Request, res: Response) => {
 // This endpoint should be called when entering a chat room to trigger the character's first message
 router.post('/initial-message', async (req: Request, res: Response) => {
   try {
-    const { session_id, config_id } = req.body as { session_id: string; config_id: string };
+    const { 
+      session_id, 
+      config_id, 
+      previous_messages 
+    } = req.body as { 
+      session_id: string; 
+      config_id: string; 
+      previous_messages?: Array<{ role: 'user' | 'ai'; content: string }> 
+    };
 
     if (!session_id || !config_id) {
       return res.status(400).json({
@@ -275,8 +283,23 @@ router.post('/initial-message', async (req: Request, res: Response) => {
 
     const chatService = getChatService();
     
-    // Send the invisible greeting message
-    const greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+    // Determine which greeting message to use based on whether there are previous messages
+    let greetingMessage: string;
+    
+    if (previous_messages && previous_messages.length > 0) {
+      // User is returning to an existing chat - format previous messages
+      const formattedMessages = previous_messages
+        .map((msg, index) => {
+          const speaker = msg.role === 'user' ? 'User' : 'You (the character)';
+          return `${speaker}: ${msg.content}`;
+        })
+        .join('\n');
+      
+      greetingMessage = `[The user has returned, greet the user again understanding that they've come back, these are the previous messages between you: ${formattedMessages}]`;
+    } else {
+      // New chat - use the original greeting
+      greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+    }
     
     const chatResponse = await chatService.sendChat({
       session_id,
