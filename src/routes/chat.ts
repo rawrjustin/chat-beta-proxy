@@ -261,6 +261,64 @@ router.post('/chat', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/initial-message - Get initial greeting message for a chat session
+// This endpoint should be called when entering a chat room to trigger the character's first message
+router.post('/initial-message', async (req: Request, res: Response) => {
+  try {
+    const { session_id, config_id } = req.body as { session_id: string; config_id: string };
+
+    if (!session_id || !config_id) {
+      return res.status(400).json({
+        error: 'session_id and config_id are required'
+      });
+    }
+
+    const chatService = getChatService();
+    
+    // Send the invisible greeting message
+    const greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+    
+    const chatResponse = await chatService.sendChat({
+      session_id,
+      input: greetingMessage,
+      config_id,
+    });
+
+    // Strip curly bracket tags from greeting response
+    const cleanedAi = stripCurlyBracketTags(chatResponse.ai);
+    const cleanedTextResponse = stripCurlyBracketTags(chatResponse.text_response_cleaned);
+
+    // Generate preprompts for the greeting response
+    let preprompts: Preprompt[] | undefined;
+    try {
+      if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
+        preprompts = await chatService.generatePreprompts(
+          greetingMessage,
+          chatResponse.text_response_cleaned || chatResponse.ai || ''
+        );
+      }
+    } catch (error) {
+      console.error('Warning: Failed to generate preprompts for initial message:', error);
+    }
+
+    // Return the initial message response (same format as regular chat response)
+    res.json({
+      ai: cleanedAi,
+      session_id: chatResponse.session.id,
+      request_id: chatResponse.request_id,
+      text_response_cleaned: cleanedTextResponse,
+      warning_message: chatResponse.warning_message,
+      preprompts,
+    });
+  } catch (error: any) {
+    console.error('Error getting initial message:', error);
+    res.status(500).json({
+      error: 'Failed to get initial message',
+      message: error.message
+    });
+  }
+});
+
 // POST /api/followups - Generate contextual follow-up options
 router.post('/followups', async (req: Request, res: Response) => {
   try {

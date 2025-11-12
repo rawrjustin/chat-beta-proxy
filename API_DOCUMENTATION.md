@@ -13,6 +13,7 @@
   - [Get Character Config](#get-character-config)
   - [Create Chat Session](#create-chat-session)
   - [Send Chat Message](#send-chat-message)
+  - [Get Initial Message](#get-initial-message)
 - [Request/Response Examples](#requestresponse-examples)
 - [Error Handling](#error-handling)
 - [TypeScript Types](#typescript-types)
@@ -342,6 +343,71 @@ const chatResponse = await response.json();
 **Error Responses:**
 - `400` - Missing required fields: `session_id`, `input`, or `config_id`
 - `500` - Failed to send chat message
+
+---
+
+### Get Initial Message
+
+Get the character's initial greeting message when entering a chat room. This endpoint automatically sends an invisible greeting message to the character and returns their response. Use this when a user first enters a chat to show the character's opening message.
+
+**Endpoint:** `POST /api/initial-message`
+
+**Request Body:**
+```typescript
+{
+  session_id: string;  // Required: Session ID (can be existing or newly created)
+  config_id: string;    // Required: Character configuration ID
+}
+```
+
+**Response:**
+```json
+{
+  "ai": "Hey there! Welcome to my world...",
+  "session_id": "c62ca618-ddef-43bf-a8e4-d6268c17f965",
+  "request_id": "gewjhZ045tUIhZTRoUK85",
+  "text_response_cleaned": "Hey there! Welcome to my world...",
+  "warning_message": null,
+  "preprompts": [
+    {
+      "type": "roleplay",
+      "prompt": "...",
+      "simplified_text": "..."
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `ai` (string) - The character's greeting response text
+- `session_id` (string) - Session identifier
+- `request_id` (string, optional) - Unique identifier for this request
+- `text_response_cleaned` (string, optional) - Cleaned version of the response
+- `warning_message` (string, optional) - Any warning messages
+- `preprompts` (array, optional) - Suggested follow-up prompts
+
+**Example:**
+```javascript
+// When user enters a chat room, call this endpoint
+const response = await fetch('http://localhost:3000/api/initial-message', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
+    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4'
+  })
+});
+
+const initialMessage = await response.json();
+// Display initialMessage.ai as the first message in the chat
+// Show loading spinner while waiting for this response
+```
+
+**Note:** This endpoint sends an invisible message ("I just walked in on you, greet me and tell me your current scenario") to the character. The user never sees this message - only the character's response is returned and should be displayed.
+
+**Error Responses:**
+- `400` - Missing required fields: `session_id` or `config_id`
+- `500` - Failed to get initial message
 
 ---
 
