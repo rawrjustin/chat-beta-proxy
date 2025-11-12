@@ -139,6 +139,12 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Jake Paul',
     display_order: 19,
   },
+  {
+    config_id: 'CHAR_ca53bee4-a10a-420f-91d1-f693ae46cfb7',
+    name: 'Roronoa Zoro',
+    description: 'Zoro from One Piece',
+    display_order: 20,
+  },
 ];
 
 /**
