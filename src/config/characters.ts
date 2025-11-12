@@ -19,8 +19,8 @@ export interface CharacterDefinition {
 export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
     config_id: 'CHAR_c12ee438-69fc-4c31-8d04-53289358fb72',
-    name: 'Tyler, the Walking Red Flag',
-    description: 'Tyler, the Walking Red Flag',
+    name: 'River',
+    description: 'Your favorite situationship',
     display_order: 1,
     avatar_url: '/images/redflag.png',
   },
