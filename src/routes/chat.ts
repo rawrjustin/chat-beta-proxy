@@ -154,7 +154,51 @@ router.post('/sessions', async (req: Request, res: Response) => {
     const chatService = getChatService();
     const session = await chatService.createSession({ config_id });
 
-    res.json(session);
+    // Automatically send greeting message to initialize the conversation
+    const greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+    let greetingResponse: any = null;
+    
+    try {
+      const chatResponse = await chatService.sendChat({
+        session_id: session.session_id,
+        input: greetingMessage,
+        config_id,
+      });
+
+      // Strip curly bracket tags from greeting response
+      const cleanedAi = stripCurlyBracketTags(chatResponse.ai);
+      const cleanedTextResponse = stripCurlyBracketTags(chatResponse.text_response_cleaned);
+
+      // Generate preprompts for the greeting response
+      let preprompts: Preprompt[] | undefined;
+      try {
+        if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
+          preprompts = await chatService.generatePreprompts(
+            greetingMessage,
+            chatResponse.text_response_cleaned || chatResponse.ai || ''
+          );
+        }
+      } catch (error) {
+        console.error('Warning: Failed to generate preprompts for greeting response:', error);
+      }
+
+      greetingResponse = {
+        ai: cleanedAi,
+        text_response_cleaned: cleanedTextResponse,
+        request_id: chatResponse.request_id,
+        warning_message: chatResponse.warning_message,
+        preprompts,
+      };
+    } catch (error) {
+      console.error('Warning: Failed to send greeting message:', error);
+      // Continue even if greeting fails - return session without greeting
+    }
+
+    // Return session with initial greeting response
+    res.json({
+      ...session,
+      initial_message: greetingResponse,
+    });
   } catch (error: any) {
     console.error('Error creating session:', error);
     res.status(500).json({
