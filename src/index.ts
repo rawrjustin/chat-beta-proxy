@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import chatRoutes from './routes/chat';
+import adminRoutes from './routes/admin';
 import { requestLogger, errorHandler } from './middleware/logger';
 import { initChatService } from './services/chatService';
 import { TokenRefreshService } from './services/tokenRefreshService';
@@ -80,6 +81,9 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api', chatRoutes);
 
+// Admin routes
+app.use('/admin', adminRoutes);
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
@@ -100,6 +104,7 @@ app.listen(PORT, () => {
    - POST /api/sessions
    - POST /api/chat
    - POST /api/followups
+   - GET  /admin (password protected)
   `);
 });
 

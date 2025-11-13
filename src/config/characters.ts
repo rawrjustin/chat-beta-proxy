@@ -11,6 +11,7 @@ export interface CharacterDefinition {
   description?: string;
   display_order?: number;
   avatar_url?: string;
+  hidden?: boolean; // If true, character is hidden from public API but visible in admin
   // Add any other metadata you want to expose to frontend
 }
 
@@ -84,66 +85,77 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Jay from ENHYPEN',
     description: 'Jay from ENHYPEN',
     display_order: 10,
+    hidden: true,
   },
   {
     config_id: 'CHAR_94dff88c-8ea5-400f-96ad-6b4cfe62025a',
     name: 'Nightwing',
     description: 'Nightwing',
     display_order: 11,
+    hidden: true,
   },
   {
     config_id: 'CHAR_4ea65277-124d-4949-8e7e-f2b4cb54061a',
     name: 'Ghost from COD',
     description: 'Ghost from COD',
     display_order: 12,
+    hidden: true,
   },
   {
     config_id: 'CHAR_6b42c735-3294-4e28-b5cf-75306f2413f1',
     name: 'Johnny Silverhand',
     description: 'Johnny Silverhand',
     display_order: 13,
+    hidden: true,
   },
   {
     config_id: 'CHAR_2f1adabf-41ef-48cc-a733-72df367b74da',
     name: 'Robin',
     description: 'Robin',
     display_order: 14,
+    hidden: true,
   },
   {
     config_id: 'CHAR_27949767-0af6-4312-aed0-9cef5ddbdeb3',
     name: 'Yunjin (LE SSERAFIM)',
     description: 'Yunjin (LE SSERAFIM)',
     display_order: 15,
+    hidden: true,
   },
   {
     config_id: 'CHAR_91d73179-f1d5-4163-bfca-3185ebee7594',
     name: 'Deku',
     description: 'Sweet, shy, and aiming to be your No.1 hero.',
     display_order: 16,
+    hidden: true,
   },
   {
     config_id: 'CHAR_625009f6-5c79-4ccb-9a2f-80d622367474',
     name: 'Freddy FNAF',
     description: 'Freddy FNAF',
     display_order: 17,
+    hidden: true,
   },
   {
     config_id: 'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
     name: 'Shawn Mendes',
     description: 'Shawn Mendes',
     display_order: 18,
+    hidden: true,
   },
   {
     config_id: 'CHAR_115ca055-9c2b-4b9a-8be8-2b9b94246bee',
     name: 'Jake Paul',
     description: 'Jake Paul',
     display_order: 19,
+    hidden: true,
   },
   {
     config_id: 'CHAR_ca53bee4-a10a-420f-91d1-f693ae46cfb7',
     name: 'Roronoa Zoro',
     description: 'Zoro from One Piece',
     display_order: 20,
+    hidden: true,
   },
   {
     config_id: 'CHAR_33b6efd3-40ef-4dd1-a319-42a8515b5a8e',
@@ -151,6 +163,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Learn to Rage with Aggretsuko',
     display_order: 21,
     avatar_url: '/images/aggretsuko.jpg',
+    hidden: true,
   },
   {
     config_id: 'CHAR_ba16c199-be27-490a-ab05-6380d877c102',
@@ -202,20 +215,45 @@ export function getAvailableCharacterIds(): string[] {
  * Get character definitions (with metadata)
  * Returns a stable, immutable array of character definitions
  * Character IDs are guaranteed to remain consistent across deployments and refreshes
+ * Filters out hidden characters for public API
  */
-export function getAvailableCharacters(): CharacterDefinition[] {
+export function getAvailableCharacters(includeHidden: boolean = false): CharacterDefinition[] {
   const envCharacters = process.env.AVAILABLE_CHARACTERS;
   
   if (envCharacters) {
     // If using env var, create minimal definitions
-    return getAvailableCharacterIds().map((config_id, index) => ({
+    const characters = getAvailableCharacterIds().map((config_id, index) => ({
       config_id,
       display_order: index + 1,
     }));
+    
+    // Filter hidden characters if not including them
+    if (!includeHidden) {
+      return characters.filter(char => {
+        const fullChar = AVAILABLE_CHARACTERS.find(c => c.config_id === char.config_id);
+        return !fullChar?.hidden;
+      });
+    }
+    
+    return characters;
   }
   
   // Return hardcoded definitions with metadata
   // Return a copy to ensure immutability and prevent accidental modifications
-  return [...AVAILABLE_CHARACTERS];
+  const allCharacters = [...AVAILABLE_CHARACTERS];
+  
+  // Filter hidden characters if not including them
+  if (!includeHidden) {
+    return allCharacters.filter(char => !char.hidden);
+  }
+  
+  return allCharacters;
+}
+
+/**
+ * Get all character definitions including hidden ones (for admin use)
+ */
+export function getAllCharacters(): CharacterDefinition[] {
+  return getAvailableCharacters(true);
 }
 
