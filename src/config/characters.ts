@@ -172,8 +172,8 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   },
   {
     config_id: 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e',
-    name: 'Dogma: Mama didn't raise no b',
-    description: 'Dogma: Mama didn't raise no b',
+    name: 'Dogma: Mama didn\'t raise no b',
+    description: 'Dogma: Mama didn\'t raise no b',
     display_order: 25,
   },
 ];
