@@ -170,6 +170,12 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Unlicensed Life Coach',
     display_order: 24,
   },
+  {
+    config_id: 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e',
+    name: 'Dogma: Mama didn't raise no b',
+    description: 'Dogma: Mama didn't raise no b',
+    display_order: 25,
+  },
 ];
 
 /**

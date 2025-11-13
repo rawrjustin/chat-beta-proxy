@@ -25,6 +25,25 @@ const PREPROMPT_MAX_TOKENS =
     ? Number(process.env.PREPROMPT_MAX_TOKENS)
     : 400;
 
+// Timeout configuration (in milliseconds)
+const API_TIMEOUT = process.env.API_TIMEOUT 
+  ? Number(process.env.API_TIMEOUT) 
+  : 120000; // Default: 120 seconds (2 minutes)
+const PREPROMPT_TIMEOUT = process.env.PREPROMPT_TIMEOUT
+  ? Number(process.env.PREPROMPT_TIMEOUT)
+  : 30000; // Default: 30 seconds for preprompt generation
+
+/**
+ * Create a timeout promise that rejects after the specified time
+ */
+function createTimeoutPromise(timeoutMs: number, requestId: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Request timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+}
+
 const PREPROMPT_INSTRUCTION = `
 Generate four short contextual pre-prompts — natural next things a user might say based on the most recent conversation (the last user message and the last AI message).
 
@@ -128,9 +147,23 @@ export class ChatService {
     method: 'GET' | 'POST' = 'GET',
     body?: any
   ): Promise<T> {
+    const startTime = Date.now();
+    const requestId = `${method}_${endpoint}_${startTime}`;
+    
     try {
+      console.log(`[${requestId}] Starting request:`, {
+        endpoint,
+        method,
+        hasBody: !!body,
+        bodySize: body ? JSON.stringify(body).length : 0,
+        timeout: API_TIMEOUT,
+      });
+
       // Get valid token (will refresh if needed)
+      const tokenStartTime = Date.now();
       const token = await this.getValidToken();
+      const tokenTime = Date.now() - tokenStartTime;
+      console.log(`[${requestId}] Token obtained in ${tokenTime}ms`);
 
       const options: any = {
         method,
@@ -144,18 +177,76 @@ export class ChatService {
         options.body = JSON.stringify(body);
       }
 
-      const response = await fetch(`${BASE_URL}${endpoint}`, options);
+      const fetchStartTime = Date.now();
+      // Use Promise.race to implement timeout for node-fetch v2
+      const response = await Promise.race([
+        fetch(`${BASE_URL}${endpoint}`, options),
+        createTimeoutPromise(API_TIMEOUT, requestId),
+      ]) as any;
+      const fetchTime = Date.now() - fetchStartTime;
+      
+      console.log(`[${requestId}] Response received:`, {
+        status: response.status,
+        statusText: response.statusText,
+        fetchTime: `${fetchTime}ms`,
+        totalTime: `${Date.now() - startTime}ms`,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
 
       if (!response.ok) {
+        const errorTextStart = Date.now();
         const errorText = await response.text();
+        const errorTextTime = Date.now() - errorTextStart;
+        
+        console.error(`[${requestId}] Request failed:`, {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText.substring(0, 500),
+          errorTextReadTime: `${errorTextTime}ms`,
+          totalTime: `${Date.now() - startTime}ms`,
+        });
+        
         throw new Error(`Request failed: ${response.status} ${errorText}`);
       }
 
+      const readStartTime = Date.now();
       const text = await response.text();
+      const readTime = Date.now() - readStartTime;
       const data = text ? JSON.parse(text) : null;
+      
+      const totalTime = Date.now() - startTime;
+      console.log(`[${requestId}] Request completed successfully:`, {
+        responseSize: text.length,
+        readTime: `${readTime}ms`,
+        totalTime: `${totalTime}ms`,
+        tokenTime: `${tokenTime}ms`,
+        fetchTime: `${fetchTime}ms`,
+      });
+      
       return data;
-    } catch (error) {
-      console.error(`[${method} ${endpoint}]:`, error);
+    } catch (error: any) {
+      const totalTime = Date.now() - startTime;
+      
+      if (error.message && error.message.includes('timeout')) {
+        console.error(`[${requestId}] Request timeout:`, {
+          timeout: API_TIMEOUT,
+          totalTime: `${totalTime}ms`,
+          endpoint,
+          method,
+          error: error.message,
+        });
+        throw new Error(`Request timeout after ${API_TIMEOUT}ms: ${endpoint}`);
+      }
+      
+      console.error(`[${requestId}] Request error:`, {
+        error: error.message,
+        errorName: error.name,
+        errorStack: error.stack?.substring(0, 500),
+        totalTime: `${totalTime}ms`,
+        endpoint,
+        method,
+      });
+      
       throw error;
     }
   }
@@ -220,6 +311,9 @@ export class ChatService {
    * Generate contextual pre-prompts via gpt-4o-mini using LLM Gateway API
    */
   async generatePreprompts(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
+    const prepromptStartTime = Date.now();
+    const prepromptRequestId = `preprompt_${prepromptStartTime}`;
+    
     try {
       const token = await this.getValidToken();
 
@@ -236,34 +330,51 @@ export class ChatService {
         max_tokens: PREPROMPT_MAX_TOKENS,
         response_format: { type: 'json_object' },
       };
-
-      console.log('[generatePreprompts] Request details:', {
+      
+      console.log(`[${prepromptRequestId}] [generatePreprompts] Request details:`, {
         endpoint: PREPROMPT_ENDPOINT,
         model: PREPROMPT_MODEL,
         prompt_name: PREPROMPT_NAME,
         payloadKeys: Object.keys(payload),
         inputs: payload.inputs,
         hasToken: !!token,
+        timeout: PREPROMPT_TIMEOUT,
       });
 
-      const response = await fetch(PREPROMPT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+      const fetchStartTime = Date.now();
+      // Use Promise.race to implement timeout for node-fetch v2
+      const response = await Promise.race([
+        fetch(PREPROMPT_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }),
+        createTimeoutPromise(PREPROMPT_TIMEOUT, prepromptRequestId),
+      ]) as any;
+      const fetchTime = Date.now() - fetchStartTime;
+      
+      console.log(`[${prepromptRequestId}] Preprompt response received:`, {
+        status: response.status,
+        statusText: response.statusText,
+        fetchTime: `${fetchTime}ms`,
+        totalTime: `${Date.now() - prepromptStartTime}ms`,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[generatePreprompts] API Error: ${response.status}`, {
+        const totalTime = Date.now() - prepromptStartTime;
+        console.error(`[${prepromptRequestId}] [generatePreprompts] API Error: ${response.status}`, {
           endpoint: PREPROMPT_ENDPOINT,
           model: PREPROMPT_MODEL,
           status: response.status,
           statusText: response.statusText,
           error: errorText.substring(0, 500),
           payload: JSON.stringify(payload).substring(0, 200),
+          fetchTime: `${fetchTime}ms`,
+          totalTime: `${totalTime}ms`,
         });
         throw new Error(`Preprompt generation failed: ${response.status} ${errorText}`);
       }
@@ -364,10 +475,23 @@ export class ChatService {
 
       console.log('[generatePreprompts] Successfully generated preprompts');
       return sanitized;
-    } catch (error) {
-      console.error('[generatePreprompts] Falling back to local suggestions:', {
+    } catch (error: any) {
+      const totalTime = Date.now() - prepromptStartTime;
+      
+      if (error.message && error.message.includes('timeout')) {
+        console.error(`[${prepromptRequestId}] Preprompt request timeout:`, {
+          timeout: PREPROMPT_TIMEOUT,
+          totalTime: `${totalTime}ms`,
+          endpoint: PREPROMPT_ENDPOINT,
+          error: error.message,
+        });
+      }
+      
+      console.error(`[${prepromptRequestId}] [generatePreprompts] Falling back to local suggestions:`, {
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        errorName: error?.name,
+        stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
+        totalTime: `${totalTime}ms`,
       });
       return this.buildFallbackPreprompts(userTurn, assistantTurn);
     }
