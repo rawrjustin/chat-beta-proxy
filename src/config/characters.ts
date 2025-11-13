@@ -152,6 +152,24 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 21,
     avatar_url: '/images/aggretsuko.jpg',
   },
+  {
+    config_id: 'CHAR_ba16c199-be27-490a-ab05-6380d877c102',
+    name: 'Fay',
+    description: 'Spacy genius girl next door',
+    display_order: 22,
+  },
+  {
+    config_id: 'CHAR_3602dd3e-4e25-4e54-b25d-ce6ec7741bb9',
+    name: 'Theo',
+    description: 'Sarcastic, "always right" boyfriend',
+    display_order: 23,
+  },
+  {
+    config_id: 'CHAR_0da620b1-c832-4fea-8a9a-eb6c15f111aa',
+    name: 'Blunt Headstrong',
+    description: 'Unlicensed Life Coach',
+    display_order: 24,
+  },
 ];
 
 /**
