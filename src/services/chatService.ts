@@ -15,7 +15,7 @@ const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-4o-mini';
 // Use LLM Gateway API with predefined prompt
 const PREPROMPT_ENDPOINT =
   process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
-const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
+const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1_vulgar';
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
