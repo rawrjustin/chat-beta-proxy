@@ -77,8 +77,9 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
     config_id: 'CHAR_d7e47bb8-cdf5-4bca-b0b0-eb518a40e79b',
     name: 'Pythagoras',
-    description: 'Pythagoras',
+    description: 'Acute guy with obtuse humor',
     display_order: 9,
+    avatar_url: '/images/pyth.png',
   },
   {
     config_id: 'CHAR_9017bddc-a9fb-438e-ab1a-97bc8b71bc89',
