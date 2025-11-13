@@ -21,6 +21,24 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
     res.json(config);
   } catch (error: any) {
     console.error('Error fetching config:', error);
+    
+    // Check if the error is a 404 from the upstream API
+    const isNotFound = error.message && (
+      error.message.includes('404') || 
+      error.message.includes('not found') ||
+      error.message.includes('Not Found')
+    );
+    
+    if (isNotFound) {
+      console.warn(`[GET /api/config/${req.params.configId}] Character config not found on upstream API. This character may have been removed or the ID may be incorrect.`);
+      return res.status(404).json({
+        error: 'Config not found',
+        message: `Character config ${req.params.configId} not found on upstream API`,
+        configId: req.params.configId
+      });
+    }
+    
+    // For other errors, return 500
     res.status(500).json({
       error: 'Failed to fetch config',
       message: error.message

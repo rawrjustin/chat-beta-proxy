@@ -116,16 +116,10 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 15,
   },
   {
-    config_id: 'CHAR_91d73179-f1d5-4163-bfca-3185ebee7594',
-    name: 'Deku',
-    description: 'Deku',
-    display_order: 16,
-  },
-  {
     config_id: 'CHAR_625009f6-5c79-4ccb-9a2f-80d622367474',
     name: 'Freddy FNAF',
     description: 'Freddy FNAF',
-    display_order: 17,
+    display_order: 16,
   },
   {
     config_id: 'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
@@ -172,8 +166,8 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   },
   {
     config_id: 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e',
-    name: 'Dogma: Mama didn\'t raise no b',
-    description: 'Dogma: Mama didn\'t raise no b',
+    name: 'Dogma',
+    description: 'Mama ain\'t raise no b',
     display_order: 25,
     avatar_url: '/images/dogma.png',
   },
