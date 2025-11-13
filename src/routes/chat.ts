@@ -292,14 +292,14 @@ router.post('/chat', async (req: Request, res: Response) => {
           // Add the current exchange to the conversation history
           historyForPreprompts = [
             ...conversation_history,
-            { role: 'user', content: input },
-            { role: 'assistant', content: response.text_response_cleaned || response.ai || '' }
-          ].slice(-8); // Keep only last 8 messages (4 pairs)
+            { role: 'user' as const, content: input },
+            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
+          ].slice(-8) as ConversationMessage[]; // Keep only last 8 messages (4 pairs)
         } else {
           // Fall back to just the current pair
           historyForPreprompts = [
-            { role: 'user', content: input },
-            { role: 'assistant', content: response.text_response_cleaned || response.ai || '' }
+            { role: 'user' as const, content: input },
+            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
           ];
         }
         
@@ -437,14 +437,14 @@ router.post('/initial-message', async (req: Request, res: Response) => {
           // Add the greeting exchange to the conversation history
           historyForPreprompts = [
             ...conversation_history,
-            { role: 'user', content: greetingMessage },
-            { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
-          ].slice(-8); // Keep only last 8 messages (4 pairs)
+            { role: 'user' as const, content: greetingMessage },
+            { role: 'assistant' as const, content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+          ].slice(-8) as ConversationMessage[]; // Keep only last 8 messages (4 pairs)
         } else {
           // Fall back to just the greeting pair
           historyForPreprompts = [
-            { role: 'user', content: greetingMessage },
-            { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+            { role: 'user' as const, content: greetingMessage },
+            { role: 'assistant' as const, content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
           ];
         }
         
