@@ -97,6 +97,7 @@ export interface ProxyChatRequest {
   session_id: string;
   input: string;
   config_id: string;
+  conversation_history?: ConversationMessage[]; // Optional: Up to 8 messages (4 pairs) for better preprompts
 }
 
 export interface ProxyChatResponse {
@@ -109,9 +110,16 @@ export interface ProxyChatResponse {
 }
 
 // Follow-ups API types
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface FollowUpsRequest {
-  user_turn: string;
-  assistant_turn: string;
+  // Either conversation_history OR user_turn + assistant_turn should be provided
+  conversation_history?: ConversationMessage[]; // Up to 8 messages (4 pairs total)
+  user_turn?: string; // Deprecated: use conversation_history instead
+  assistant_turn?: string; // Deprecated: use conversation_history instead
   config_id?: string;
 }
 

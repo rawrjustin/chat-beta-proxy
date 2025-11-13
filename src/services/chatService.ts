@@ -6,7 +6,8 @@ import {
   CreateSessionResponse,
   ConfigResponse,
   Preprompt,
-  PrepromptPayload
+  PrepromptPayload,
+  ConversationMessage
 } from '../types/chat';
 import { TokenRefreshService } from './tokenRefreshService';
 
@@ -310,11 +311,10 @@ export class ChatService {
 
   /**
    * Generate contextual pre-prompts via gpt-4o-mini using LLM Gateway API
-   * @param userTurn - The user's message
-   * @param assistantTurn - The assistant's response
+   * @param conversationHistory - Array of messages with role and content (up to 8 messages, 4 pairs total)
    * @param configId - Optional character config ID to determine which prompt to use
    */
-  async generatePreprompts(userTurn: string, assistantTurn: string, configId?: string): Promise<Preprompt[]> {
+  async generatePreprompts(conversationHistory: ConversationMessage[], configId?: string): Promise<Preprompt[]> {
     const prepromptStartTime = Date.now();
     const prepromptRequestId = `preprompt_${prepromptStartTime}`;
     
@@ -328,12 +328,12 @@ export class ChatService {
 
       // Use LLM Gateway API format with predefined prompt_name
       // The prompt template 'contextual_followups_v1' should handle the instruction formatting
+      // Now using conversation_history instead of user_turn and assistant_turn
       const payload: any = {
         model: PREPROMPT_MODEL,
         prompt_name: promptName,
         inputs: {
-          user_turn: userTurn,
-          assistant_turn: assistantTurn,
+          conversation_history: conversationHistory,
         },
         temperature: PREPROMPT_TEMPERATURE,
         max_tokens: PREPROMPT_MAX_TOKENS,
@@ -347,6 +347,7 @@ export class ChatService {
         configId: configId || 'none',
         payloadKeys: Object.keys(payload),
         inputs: payload.inputs,
+        conversationHistoryPairs: conversationHistory.length,
         hasToken: !!token,
         timeout: PREPROMPT_TIMEOUT,
       });
@@ -503,18 +504,45 @@ export class ChatService {
         stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
         totalTime: `${totalTime}ms`,
       });
-      return this.buildFallbackPreprompts(userTurn, assistantTurn);
+      // Extract last pair for fallback if available
+      const lastUserMessage = conversationHistory && conversationHistory.length > 0
+        ? conversationHistory.filter(msg => msg.role === 'user').pop()?.content || ''
+        : '';
+      const lastAssistantMessage = conversationHistory && conversationHistory.length > 0
+        ? conversationHistory.filter(msg => msg.role === 'assistant').pop()?.content || ''
+        : '';
+      return this.buildFallbackPreprompts(
+        lastUserMessage,
+        lastAssistantMessage
+      );
     }
   }
 
   /**
    * Call LLM Gateway API to generate contextual follow-ups
-   * @param userTurn - The user's message
-   * @param assistantTurn - The assistant's response
+   * @param conversationHistory - Array of messages with role and content (up to 8 messages, 4 pairs total)
+   * @param userTurn - Legacy: The user's message (used if conversationHistory not provided)
+   * @param assistantTurn - Legacy: The assistant's response (used if conversationHistory not provided)
    * @param configId - Optional character config ID to determine which prompt to use
    */
-  async getFollowUps(userTurn: string, assistantTurn: string, configId?: string): Promise<Preprompt[]> {
-    return this.generatePreprompts(userTurn, assistantTurn, configId);
+  async getFollowUps(
+    conversationHistory?: ConversationMessage[],
+    userTurn?: string,
+    assistantTurn?: string,
+    configId?: string
+  ): Promise<Preprompt[]> {
+    // If conversation_history is provided, use it; otherwise fall back to legacy single pair
+    if (conversationHistory && conversationHistory.length > 0) {
+      return this.generatePreprompts(conversationHistory, configId);
+    } else if (userTurn && assistantTurn) {
+      // Legacy support: convert single pair to conversation_history format
+      return this.generatePreprompts([
+        { role: 'user', content: userTurn },
+        { role: 'assistant', content: assistantTurn }
+      ], configId);
+    } else {
+      throw new Error('Either conversation_history or user_turn + assistant_turn must be provided');
+    }
   }
 
   private buildFallbackPreprompts(userTurn: string, assistantTurn: string): Preprompt[] {

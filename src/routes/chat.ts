@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
-import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt } from '../types/chat';
+import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt, ConversationMessage } from '../types/chat';
 import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
 import { stripCurlyBracketTags } from '../utils/textUtils';
 
@@ -50,7 +50,9 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
 router.get('/characters', async (req: Request, res: Response) => {
   try {
     // Get character definitions - this is the source of truth for character IDs
+    // This automatically filters out hidden characters
     const characterDefinitions = getAvailableCharacters();
+    console.log(`[GET /api/characters] Returning ${characterDefinitions.length} visible characters (hidden characters filtered out)`);
     
     // Use definitions directly to ensure stable order and IDs
     // Don't rely on getAvailableCharacterIds() which might have different ordering
@@ -192,8 +194,10 @@ router.post('/sessions', async (req: Request, res: Response) => {
       try {
         if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
           preprompts = await chatService.generatePreprompts(
-            greetingMessage,
-            chatResponse.text_response_cleaned || chatResponse.ai || '',
+            [
+              { role: 'user', content: greetingMessage },
+              { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+            ],
             config_id
           );
         }
@@ -230,13 +234,45 @@ router.post('/sessions', async (req: Request, res: Response) => {
 // POST /api/chat - Send chat message
 router.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { session_id, input, config_id } = req.body as ProxyChatRequest;
+    const { session_id, input, config_id, conversation_history } = req.body as ProxyChatRequest;
 
     // session_id can be empty string (API will create new session)
     if (session_id === undefined || !input || !config_id) {
       return res.status(400).json({
         error: 'session_id (can be empty), input, and config_id are required'
       });
+    }
+
+    // Validate conversation_history if provided
+    if (conversation_history) {
+      if (!Array.isArray(conversation_history)) {
+        return res.status(400).json({
+          error: 'conversation_history must be an array'
+        });
+      }
+      if (conversation_history.length > 8) {
+        return res.status(400).json({
+          error: 'conversation_history can contain at most 8 messages (4 pairs total)'
+        });
+      }
+      for (let i = 0; i < conversation_history.length; i++) {
+        const message = conversation_history[i];
+        if (!message || typeof message !== 'object') {
+          return res.status(400).json({
+            error: `conversation_history[${i}] must be an object`
+          });
+        }
+        if (message.role !== 'user' && message.role !== 'assistant') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+          });
+        }
+        if (typeof message.content !== 'string') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].content must be a string`
+          });
+        }
+      }
     }
 
     const chatService = getChatService();
@@ -249,9 +285,26 @@ router.post('/chat', async (req: Request, res: Response) => {
     let preprompts: Preprompt[] | undefined;
     try {
       if (input && (response.ai || response.text_response_cleaned)) {
+        // Use conversation_history if provided, otherwise fall back to just the current pair
+        let historyForPreprompts: ConversationMessage[];
+        
+        if (conversation_history && conversation_history.length > 0) {
+          // Add the current exchange to the conversation history
+          historyForPreprompts = [
+            ...conversation_history,
+            { role: 'user', content: input },
+            { role: 'assistant', content: response.text_response_cleaned || response.ai || '' }
+          ].slice(-8); // Keep only last 8 messages (4 pairs)
+        } else {
+          // Fall back to just the current pair
+          historyForPreprompts = [
+            { role: 'user', content: input },
+            { role: 'assistant', content: response.text_response_cleaned || response.ai || '' }
+          ];
+        }
+        
         preprompts = await chatService.generatePreprompts(
-          input,
-          response.text_response_cleaned || response.ai || '',
+          historyForPreprompts,
           config_id
         );
       }
@@ -288,11 +341,13 @@ router.post('/initial-message', async (req: Request, res: Response) => {
     const { 
       session_id, 
       config_id, 
-      previous_messages 
+      previous_messages,
+      conversation_history
     } = req.body as { 
       session_id: string; 
       config_id: string; 
-      previous_messages?: Array<{ role: 'user' | 'ai'; content: string }> 
+      previous_messages?: Array<{ role: 'user' | 'ai'; content: string }>; // Legacy format
+      conversation_history?: ConversationMessage[]; // New format
     };
 
     if (!session_id || !config_id) {
@@ -301,14 +356,54 @@ router.post('/initial-message', async (req: Request, res: Response) => {
       });
     }
 
+    // Validate conversation_history if provided
+    if (conversation_history) {
+      if (!Array.isArray(conversation_history)) {
+        return res.status(400).json({
+          error: 'conversation_history must be an array'
+        });
+      }
+      if (conversation_history.length > 8) {
+        return res.status(400).json({
+          error: 'conversation_history can contain at most 8 messages (4 pairs total)'
+        });
+      }
+      for (let i = 0; i < conversation_history.length; i++) {
+        const message = conversation_history[i];
+        if (!message || typeof message !== 'object') {
+          return res.status(400).json({
+            error: `conversation_history[${i}] must be an object`
+          });
+        }
+        if (message.role !== 'user' && message.role !== 'assistant') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+          });
+        }
+        if (typeof message.content !== 'string') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].content must be a string`
+          });
+        }
+      }
+    }
+
     const chatService = getChatService();
     
     // Determine which greeting message to use based on whether there are previous messages
     let greetingMessage: string;
     
-    if (previous_messages && previous_messages.length > 0) {
+    // Convert conversation_history to previous_messages format if needed (for backward compatibility)
+    const messagesToFormat = conversation_history 
+      ? conversation_history.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'ai' as 'user' | 'ai',
+          content: msg.content
+        }))
+      : previous_messages;
+    
+    if (messagesToFormat && messagesToFormat.length > 0) {
       // User is returning to an existing chat - format previous messages
-      const formattedMessages = previous_messages
+      const formattedMessages = messagesToFormat
         .map((msg, index) => {
           const speaker = msg.role === 'user' ? 'User' : 'You (the character)';
           return `${speaker}: ${msg.content}`;
@@ -335,9 +430,26 @@ router.post('/initial-message', async (req: Request, res: Response) => {
     let preprompts: Preprompt[] | undefined;
     try {
       if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
+        // Use conversation_history if provided, otherwise fall back to just the greeting pair
+        let historyForPreprompts: ConversationMessage[];
+        
+        if (conversation_history && conversation_history.length > 0) {
+          // Add the greeting exchange to the conversation history
+          historyForPreprompts = [
+            ...conversation_history,
+            { role: 'user', content: greetingMessage },
+            { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+          ].slice(-8); // Keep only last 8 messages (4 pairs)
+        } else {
+          // Fall back to just the greeting pair
+          historyForPreprompts = [
+            { role: 'user', content: greetingMessage },
+            { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+          ];
+        }
+        
         preprompts = await chatService.generatePreprompts(
-          greetingMessage,
-          chatResponse.text_response_cleaned || chatResponse.ai || '',
+          historyForPreprompts,
           config_id
         );
       }
@@ -366,16 +478,59 @@ router.post('/initial-message', async (req: Request, res: Response) => {
 // POST /api/followups - Generate contextual follow-up options
 router.post('/followups', async (req: Request, res: Response) => {
   try {
-    const { user_turn, assistant_turn, config_id } = req.body as FollowUpsRequest;
+    const { conversation_history, user_turn, assistant_turn, config_id } = req.body as FollowUpsRequest;
 
-    if (!user_turn || !assistant_turn) {
+    // Validate input: either conversation_history or user_turn + assistant_turn must be provided
+    if (conversation_history) {
+      // Validate conversation_history structure
+      if (!Array.isArray(conversation_history)) {
+        return res.status(400).json({
+          error: 'conversation_history must be an array'
+        });
+      }
+      
+      // Limit to 8 messages (4 pairs total)
+      if (conversation_history.length > 8) {
+        return res.status(400).json({
+          error: 'conversation_history can contain at most 8 messages (4 pairs total)'
+        });
+      }
+      
+      // Validate each message has role and content fields
+      for (let i = 0; i < conversation_history.length; i++) {
+        const message = conversation_history[i];
+        if (!message || typeof message !== 'object') {
+          return res.status(400).json({
+            error: `conversation_history[${i}] must be an object`
+          });
+        }
+        if (message.role !== 'user' && message.role !== 'assistant') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+          });
+        }
+        if (typeof message.content !== 'string') {
+          return res.status(400).json({
+            error: `conversation_history[${i}].content must be a string`
+          });
+        }
+      }
+    } else if (user_turn && assistant_turn) {
+      // Legacy support: convert single pair to conversation_history format
+      // This maintains backward compatibility
+    } else {
       return res.status(400).json({
-        error: 'user_turn and assistant_turn are required'
+        error: 'Either conversation_history (up to 8 messages) or user_turn + assistant_turn must be provided'
       });
     }
 
     const chatService = getChatService();
-    const preprompts = await chatService.getFollowUps(user_turn, assistant_turn, config_id);
+    const preprompts = await chatService.getFollowUps(
+      conversation_history,
+      user_turn,
+      assistant_turn,
+      config_id
+    );
 
     res.json({
       preprompts,

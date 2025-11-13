@@ -244,7 +244,12 @@ export function getAvailableCharacters(includeHidden: boolean = false): Characte
   
   // Filter hidden characters if not including them
   if (!includeHidden) {
-    return allCharacters.filter(char => !char.hidden);
+    const filtered = allCharacters.filter(char => !char.hidden);
+    const hiddenCount = allCharacters.length - filtered.length;
+    if (hiddenCount > 0) {
+      console.log(`[getAvailableCharacters] Filtered out ${hiddenCount} hidden character(s)`);
+    }
+    return filtered;
   }
   
   return allCharacters;

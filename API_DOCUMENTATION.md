@@ -14,6 +14,7 @@
   - [Create Chat Session](#create-chat-session)
   - [Send Chat Message](#send-chat-message)
   - [Get Initial Message](#get-initial-message)
+  - [Generate Follow-up Options](#generate-follow-up-options)
 - [Request/Response Examples](#requestresponse-examples)
 - [Error Handling](#error-handling)
 - [TypeScript Types](#typescript-types)
@@ -273,7 +274,7 @@ const sessionId = session.session_id;
 
 ### Send Chat Message
 
-Send a message to the chat AI and receive a response.
+Send a message to the chat AI and receive a response. The endpoint automatically generates contextual follow-up prompts based on the conversation history.
 
 **Endpoint:** `POST /api/chat`
 
@@ -283,6 +284,10 @@ Send a message to the chat AI and receive a response.
   session_id: string;  // Required: Session ID from /api/sessions (can be empty string to create new session)
   config_id: string;   // Required: Character configuration ID
   input: string;       // Required: User's message text
+  conversation_history?: Array<{  // Optional: Up to 8 messages (4 pairs) for better preprompts
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
 }
 ```
 
@@ -293,7 +298,15 @@ Send a message to the chat AI and receive a response.
   "session_id": "c62ca618-ddef-43bf-a8e4-d6268c17f965",
   "request_id": "gewjhZ045tUIhZTRoUK85",
   "text_response_cleaned": "Well, howdy there, partner! I'm doing just fine...",
-  "warning_message": null
+  "warning_message": null,
+  "preprompts": [
+    {
+      "type": "roleplay",
+      "prompt": "Full prompt text to send when clicked",
+      "simplified_text": "Short text for UI"
+    }
+    // ... 3 more preprompts
+  ]
 }
 ```
 
@@ -303,8 +316,9 @@ Send a message to the chat AI and receive a response.
 - `request_id` (string, optional) - Unique identifier for this request
 - `text_response_cleaned` (string, optional) - Cleaned version of the AI response
 - `warning_message` (string, optional) - Any warning messages
+- `preprompts` (array, optional) - 4 contextual follow-up prompts (automatically generated)
 
-**Example:**
+**Example - Basic Usage:**
 ```javascript
 const response = await fetch('http://localhost:3000/api/chat', {
   method: 'POST',
@@ -319,6 +333,36 @@ const response = await fetch('http://localhost:3000/api/chat', {
 const chatResponse = await response.json();
 console.log('AI:', chatResponse.ai);
 console.log('Session:', chatResponse.session_id);
+console.log('Follow-ups:', chatResponse.preprompts); // Automatically generated
+```
+
+**Example - With Conversation History (Recommended for Better Context):**
+```javascript
+// Get last 4 pairs of messages from your chat history
+const recentMessages = [
+  { role: 'user', content: 'What do you think about AI?' },
+  { role: 'assistant', content: 'I think AI is fascinating! What interests you?' },
+  { role: 'user', content: 'I want to build something cool.' },
+  { role: 'assistant', content: 'That sounds exciting! What kind of project?' },
+  { role: 'user', content: 'Maybe a chatbot?' },
+  { role: 'assistant', content: 'Great idea! Chatbots can be really engaging.' },
+  { role: 'user', content: 'How do I get started?' },
+  { role: 'assistant', content: 'Start with a simple use case and build from there!' }
+];
+
+const response = await fetch('http://localhost:3000/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
+    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
+    input: 'Can you help me design the conversation flow?',
+    conversation_history: recentMessages.slice(-8) // Last 8 messages (4 pairs)
+  })
+});
+
+const chatResponse = await response.json();
+// chatResponse.preprompts will be more contextual based on full conversation history
 ```
 
 **Special Case: Empty Session ID**
@@ -341,8 +385,19 @@ const chatResponse = await response.json();
 ```
 
 **Error Responses:**
-- `400` - Missing required fields: `session_id`, `input`, or `config_id`
+- `400` - Invalid request:
+  - Missing required fields: `session_id`, `input`, or `config_id`
+  - `"conversation_history must be an array"`
+  - `"conversation_history can contain at most 8 messages (4 pairs total)"`
+  - `"conversation_history[0].role must be either 'user' or 'assistant'"`
+  - `"conversation_history[0].content must be a string"`
 - `500` - Failed to send chat message
+
+**Notes:**
+- **Preprompts are automatically generated** and included in the response
+- If `conversation_history` is provided, preprompts will be more contextual based on the full conversation
+- If `conversation_history` is not provided, preprompts are generated from just the current message pair
+- The endpoint automatically appends the current exchange to the conversation history before generating preprompts
 
 ---
 
@@ -357,7 +412,11 @@ Get the character's initial greeting message when entering a chat room. This end
 {
   session_id: string;  // Required: Session ID (can be existing or newly created)
   config_id: string;   // Required: Character configuration ID
-  previous_messages?: Array<{  // Optional: Previous conversation messages
+  conversation_history?: Array<{  // Optional: Previous conversation messages (recommended format)
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+  previous_messages?: Array<{  // Optional: Legacy format (use conversation_history instead)
     role: 'user' | 'ai';
     content: string;
   }>;
@@ -365,8 +424,10 @@ Get the character's initial greeting message when entering a chat room. This end
 ```
 
 **Behavior:**
-- **New Chat** (no `previous_messages` or empty array): Sends "I just walked in on you, greet me and tell me your current scenario"
-- **Returning User** (with `previous_messages`): Sends a message acknowledging the user's return and includes the conversation history
+- **New Chat** (no `conversation_history`/`previous_messages` or empty array): Sends "I just walked in on you, greet me and tell me your current scenario"
+- **Returning User** (with `conversation_history` or `previous_messages`): Sends a message acknowledging the user's return and includes the conversation history
+
+**Note:** Use `conversation_history` (with `role: 'user' | 'assistant'`) instead of `previous_messages` (with `role: 'user' | 'ai'`) for consistency with other endpoints.
 
 **Response:**
 ```json
@@ -403,22 +464,24 @@ const response = await fetch('http://localhost:3000/api/initial-message', {
   body: JSON.stringify({
     session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
     config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4'
-    // No previous_messages - this is a new chat
+    // No conversation_history - this is a new chat
   })
 });
 
 const initialMessage = await response.json();
 // Display initialMessage.ai as the first message in the chat
+// Show initialMessage.preprompts as follow-up options
 // Show loading spinner while waiting for this response
 ```
 
-**Example - Returning User:**
+**Example - Returning User (Recommended Format):**
 ```javascript
 // When user returns to an existing chat (has previous messages)
-const previousMessages = [
+const conversationHistory = [
   { role: 'user', content: 'Hello, how are you?' },
-  { role: 'ai', content: 'I\'m doing great! How about you?' },
-  { role: 'user', content: 'I\'m good too, thanks!' }
+  { role: 'assistant', content: 'I\'m doing great! How about you?' },
+  { role: 'user', content: 'I\'m good too, thanks!' },
+  { role: 'assistant', content: 'That\'s wonderful to hear!' }
 ];
 
 const response = await fetch('http://localhost:3000/api/initial-message', {
@@ -427,13 +490,33 @@ const response = await fetch('http://localhost:3000/api/initial-message', {
   body: JSON.stringify({
     session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
     config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
-    previous_messages: previousMessages  // Include previous conversation
+    conversation_history: conversationHistory.slice(-8) // Last 8 messages (4 pairs)
   })
 });
 
 const initialMessage = await response.json();
 // Display initialMessage.ai as the greeting message acknowledging the return
+// Display initialMessage.preprompts as follow-up options (contextual based on history)
 // Show loading spinner while waiting for this response
+```
+
+**Example - Legacy Format (Still Supported):**
+```javascript
+// Legacy format using previous_messages (still works but not recommended)
+const previousMessages = [
+  { role: 'user', content: 'Hello, how are you?' },
+  { role: 'ai', content: 'I\'m doing great! How about you?' }
+];
+
+const response = await fetch('http://localhost:3000/api/initial-message', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    session_id: 'c62ca618-ddef-43bf-a8e4-d6268c17f965',
+    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4',
+    previous_messages: previousMessages  // Legacy format
+  })
+});
 ```
 
 **Note:** 
@@ -442,8 +525,304 @@ const initialMessage = await response.json();
 - The user never sees these invisible messages - only the character's response is returned and should be displayed.
 
 **Error Responses:**
-- `400` - Missing required fields: `session_id` or `config_id`
+- `400` - Invalid request:
+  - Missing required fields: `session_id` or `config_id`
+  - `"conversation_history must be an array"`
+  - `"conversation_history can contain at most 8 messages (4 pairs total)"`
+  - `"conversation_history[0].role must be either 'user' or 'assistant'"`
+  - `"conversation_history[0].content must be a string"`
 - `500` - Failed to get initial message
+
+**Notes:**
+- **Preprompts are automatically generated** and included in the response
+- If `conversation_history` is provided, preprompts will be more contextual based on the full conversation
+- Use `conversation_history` format (`role: 'user' | 'assistant'`) instead of `previous_messages` (`role: 'user' | 'ai'`) for consistency
+
+---
+
+### Generate Follow-up Options
+
+Generate contextual follow-up prompts based on recent conversation history. This endpoint uses AI to generate 4 suggested prompts (2 roleplay, 2 conversational) that users can click to continue the conversation.
+
+**Endpoint:** `POST /api/followups`
+
+**Request Body:**
+```typescript
+{
+  conversation_history?: Array<{  // Recommended: Up to 8 messages (4 pairs)
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+  user_turn?: string;              // Legacy: Use conversation_history instead
+  assistant_turn?: string;         // Legacy: Use conversation_history instead
+  config_id?: string;              // Optional: Character config ID
+}
+```
+
+**Request Format Options:**
+
+**Option 1: Using `conversation_history` (Recommended)**
+```json
+{
+  "conversation_history": [
+    {
+      "role": "user",
+      "content": "I slam my fist on the table, rattling the protein shaker. \"Forget warming up, bro! We're going straight into the abyss. You wanna talk about the primal urge to dominate or just rip some fucking weight?\""
+    },
+    {
+      "role": "assistant",
+      "content": "HA! THAT'S WHAT I'M TALKIN' ABOUT! Straight chaos energy! Alright, abyss mode it is—rack's waiting, bar's cold, souls are trembling. You wanna call first lift or should I unleash the opening set of destiny?"
+    },
+    {
+      "role": "user",
+      "content": "I grab the heaviest dumbbell I can find, hefting it with a grunt. \"Let's start with something that'll make my balls retract. Drop set on these fuckers until I can't feel my arms.\""
+    },
+    {
+      "role": "assistant",
+      "content": "YES SIR! THAT'S THE SPIRIT OF THE IRON CHURCH! Alright, drop set protocol: clean form, no chicken wings, breathe like you're powering a jet engine. I'll count the reps, you chase the burn. You goin' full drop or you want me to spot halfway?"
+    }
+  ],
+  "config_id": "CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e"
+}
+```
+
+**Option 2: Legacy Format (Still Supported)**
+```json
+{
+  "user_turn": "Hello, how are you?",
+  "assistant_turn": "I'm doing great, thanks for asking! How can I help you today?",
+  "config_id": "CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4"
+}
+```
+
+**Response:**
+```json
+{
+  "preprompts": [
+    {
+      "type": "roleplay",
+      "prompt": "You lean in with a grin, daring them to dish the weirdest fact about their day.",
+      "simplified_text": "spill the weird"
+    },
+    {
+      "type": "roleplay",
+      "prompt": "You clap once, ready for action, and tell them you're about to throw a curveball of a request.",
+      "simplified_text": "hit me wild"
+    },
+    {
+      "type": "conversation",
+      "prompt": "Okay, now I'm curious—what do you actually love helping people with the most?",
+      "simplified_text": "what's your thing?"
+    },
+    {
+      "type": "conversation",
+      "prompt": "Hold on, so what happens if I just keep asking you for spicier story ideas?",
+      "simplified_text": "spicier ideas?"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `preprompts` (array) - Array of 4 suggested follow-up prompts
+  - `type` (string) - Either `"roleplay"` or `"conversation"`
+    - First 2 are always `"roleplay"` (action-driven)
+    - Last 2 are always `"conversation"` (curiosity-driven)
+  - `prompt` (string) - Full prompt text (1-2 sentences) to send to the character
+  - `simplified_text` (string) - Short version (≤10 words) for display in UI
+
+**Validation Rules:**
+- `conversation_history` must be an array
+- Maximum 8 messages (4 pairs of user/assistant)
+- Each message must have:
+  - `role`: Either `"user"` or `"assistant"`
+  - `content`: String with the message text
+- Either `conversation_history` OR (`user_turn` + `assistant_turn`) must be provided
+
+**Example - Using Conversation History:**
+```javascript
+// Get the last 4 pairs of messages from your chat history
+const recentMessages = [
+  { role: 'user', content: 'What do you think about AI?' },
+  { role: 'assistant', content: 'I think AI is fascinating! What interests you?' },
+  { role: 'user', content: 'I want to build something cool.' },
+  { role: 'assistant', content: 'That sounds exciting! What kind of project?' },
+  { role: 'user', content: 'Maybe a chatbot?' },
+  { role: 'assistant', content: 'Great idea! Chatbots can be really engaging.' },
+  { role: 'user', content: 'How do I get started?' },
+  { role: 'assistant', content: 'Start with a simple use case and build from there!' }
+];
+
+const response = await fetch('http://localhost:3000/api/followups', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    conversation_history: recentMessages.slice(-8), // Last 8 messages (4 pairs)
+    config_id: 'CHAR_6c606003-8b02-4943-8690-73b9b8fe3ae4'
+  })
+});
+
+const data = await response.json();
+
+// Display preprompts to user
+data.preprompts.forEach((preprompt, index) => {
+  console.log(`${index + 1}. [${preprompt.type}] ${preprompt.simplified_text}`);
+  // Use preprompt.prompt when user clicks to send the full prompt
+});
+```
+
+**Example - React Hook:**
+```tsx
+import { useState, useCallback } from 'react';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface Preprompt {
+  type: 'roleplay' | 'conversation';
+  prompt: string;
+  simplified_text: string;
+}
+
+export function useFollowUps(configId: string) {
+  const [preprompts, setPreprompts] = useState<Preprompt[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const generateFollowUps = useCallback(async (messages: Message[]) => {
+    setIsLoading(true);
+    try {
+      // Get last 8 messages (4 pairs) if available
+      const recentMessages = messages.slice(-8);
+      
+      const response = await fetch('http://localhost:3000/api/followups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_history: recentMessages,
+          config_id: configId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate follow-ups');
+      }
+
+      const data = await response.json();
+      setPreprompts(data.preprompts);
+    } catch (error) {
+      console.error('Error generating follow-ups:', error);
+      setPreprompts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [configId]);
+
+  return { preprompts, isLoading, generateFollowUps };
+}
+
+// Usage in component
+function ChatComponent() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const { preprompts, isLoading, generateFollowUps } = useFollowUps('CHAR_...');
+
+  // After receiving AI response, generate follow-ups
+  const handleAIResponse = async (aiMessage: string) => {
+    setMessages(prev => [...prev, { role: 'assistant', content: aiMessage }]);
+    
+    // Generate follow-ups with updated message history
+    const updatedMessages = [...messages, { role: 'assistant', content: aiMessage }];
+    await generateFollowUps(updatedMessages);
+  };
+
+  return (
+    <div>
+      {/* Chat messages */}
+      {messages.map((msg, i) => (
+        <div key={i}>{msg.content}</div>
+      ))}
+      
+      {/* Follow-up prompts */}
+      {preprompts.length > 0 && (
+        <div className="follow-ups">
+          {preprompts.map((p, i) => (
+            <button
+              key={i}
+              onClick={() => sendMessage(p.prompt)} // Use full prompt
+              className={`preprompt ${p.type}`}
+            >
+              {p.simplified_text}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**Example - Getting Last 4 Pairs from Chat History:**
+```javascript
+// Helper function to extract last 4 pairs from chat messages
+function getLastFourPairs(messages) {
+  // Filter to get only user and assistant messages
+  const validMessages = messages.filter(msg => 
+    msg.role === 'user' || msg.role === 'assistant'
+  );
+  
+  // Get last 8 messages (4 pairs)
+  return validMessages.slice(-8);
+}
+
+// Usage
+const chatHistory = [
+  { role: 'user', content: 'Hello' },
+  { role: 'assistant', content: 'Hi there!' },
+  { role: 'user', content: 'How are you?' },
+  { role: 'assistant', content: 'I'm great!' },
+  { role: 'user', content: 'Tell me a joke' },
+  { role: 'assistant', content: 'Why did the chicken cross the road?' },
+  { role: 'user', content: 'I don't know' },
+  { role: 'assistant', content: 'To get to the other side!' }
+];
+
+const lastFourPairs = getLastFourPairs(chatHistory);
+// Returns last 8 messages (4 pairs)
+
+// Send to API
+const response = await fetch('http://localhost:3000/api/followups', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    conversation_history: lastFourPairs,
+    config_id: 'CHAR_...'
+  })
+});
+```
+
+**Error Responses:**
+- `400` - Invalid request:
+  - `"conversation_history must be an array"`
+  - `"conversation_history can contain at most 8 messages (4 pairs total)"`
+  - `"conversation_history[0].role must be either 'user' or 'assistant'"`
+  - `"conversation_history[0].content must be a string"`
+  - `"Either conversation_history (up to 8 messages) or user_turn + assistant_turn must be provided"`
+- `500` - Failed to generate follow-ups
+
+**Best Practices:**
+1. **Use `conversation_history`** - The new format provides better context for generating relevant follow-ups
+2. **Send last 4 pairs** - Include the most recent 8 messages (4 user + 4 assistant) when available
+3. **Handle empty history** - If you have fewer than 8 messages, send what you have
+4. **Display `simplified_text`** - Show the short version in the UI, but send `prompt` when clicked
+5. **Update after each message** - Regenerate follow-ups after each AI response to keep them contextual
+6. **Show loading state** - Display a loading indicator while generating follow-ups
+
+**Notes:**
+- The API automatically limits to 8 messages (4 pairs) - if you send more, you'll get a 400 error
+- Messages should alternate between user and assistant, but the API doesn't enforce strict alternation
+- The `config_id` is optional but recommended for character-specific prompt generation
+- Legacy format (`user_turn` + `assistant_turn`) is still supported for backward compatibility
 
 ---
 
@@ -589,10 +968,23 @@ interface ProxyChatRequest {
   session_id: string;  // Can be empty string
   input: string;
   config_id: string;
+  conversation_history?: ConversationMessage[]; // Optional: Up to 8 messages (4 pairs) for better preprompts
 }
 
 interface GetConfigsRequest {
   config_ids: string[];  // Array of character config IDs (max 50)
+}
+
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface FollowUpsRequest {
+  conversation_history?: ConversationMessage[]; // Up to 8 messages (4 pairs total)
+  user_turn?: string;                         // Legacy: Use conversation_history instead
+  assistant_turn?: string;                     // Legacy: Use conversation_history instead
+  config_id?: string;                          // Optional: Character config ID
 }
 ```
 
@@ -637,6 +1029,16 @@ interface CharacterResponse {
 interface CharactersResponse {
   characters: CharacterResponse[];
   total: number;
+}
+
+interface Preprompt {
+  type: 'roleplay' | 'conversation';
+  prompt: string;
+  simplified_text: string;
+}
+
+interface FollowUpsResponse {
+  preprompts: Preprompt[];
 }
 
 interface ErrorResponse {
