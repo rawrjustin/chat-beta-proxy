@@ -171,18 +171,21 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Fay',
     description: 'Spacy genius girl next door',
     display_order: 22,
+    avatar_url: '/images/fay.png',
   },
   {
     config_id: 'CHAR_3602dd3e-4e25-4e54-b25d-ce6ec7741bb9',
     name: 'Theo',
     description: 'Sarcastic, "always right" boyfriend',
     display_order: 23,
+    avatar_url: '/images/theo.png',
   },
   {
     config_id: 'CHAR_0da620b1-c832-4fea-8a9a-eb6c15f111aa',
     name: 'Blunt Headstrong',
     description: 'Unlicensed Life Coach',
     display_order: 24,
+    avatar_url: '/images/blunt.png',
   },
   {
     config_id: 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e',

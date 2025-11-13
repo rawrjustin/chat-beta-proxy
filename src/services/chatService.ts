@@ -35,6 +35,14 @@ const PREPROMPT_TIMEOUT = process.env.PREPROMPT_TIMEOUT
   ? Number(process.env.PREPROMPT_TIMEOUT)
   : 30000; // Default: 30 seconds for preprompt generation
 
+// Retry configuration
+const MAX_RETRIES = process.env.MAX_RETRIES 
+  ? Number(process.env.MAX_RETRIES) 
+  : 3; // Default: 3 retries
+const RETRY_DELAY_BASE = process.env.RETRY_DELAY_BASE
+  ? Number(process.env.RETRY_DELAY_BASE)
+  : 1000; // Default: 1 second base delay
+
 /**
  * Create a timeout promise that rejects after the specified time
  */
@@ -44,6 +52,57 @@ function createTimeoutPromise(timeoutMs: number, requestId: string): Promise<nev
       reject(new Error(`Request timeout after ${timeoutMs}ms`));
     }, timeoutMs);
   });
+}
+
+/**
+ * Sleep for the specified number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if an error is retryable (504, 502, 503, or timeout errors)
+ */
+function isRetryableError(error: any): boolean {
+  if (!error) return false;
+  
+  const errorMessage = error.message || '';
+  
+  // Extract status code from error message if not set on error object
+  // Format: "Request failed: 504 {...}" or similar
+  let errorStatus = error.status || error.response?.status;
+  if (!errorStatus && errorMessage) {
+    const statusMatch = errorMessage.match(/\b(50[0-9]|40[89]|429)\b/);
+    if (statusMatch) {
+      errorStatus = parseInt(statusMatch[1], 10);
+    }
+  }
+  
+  // Retry on gateway/timeout errors
+  if (errorStatus === 504 || errorStatus === 502 || errorStatus === 503) {
+    return true;
+  }
+  
+  // Retry on timeout errors (check message for timeout indicators)
+  if (errorMessage.includes('timeout') || errorMessage.includes('504') || errorMessage.includes('timed out')) {
+    return true;
+  }
+  
+  // Don't retry on client errors (4xx except 408, 429)
+  if (errorStatus >= 400 && errorStatus < 500) {
+    if (errorStatus === 408 || errorStatus === 429) {
+      return true; // Request timeout and rate limit are retryable
+    }
+    return false;
+  }
+  
+  // Retry on server errors (5xx)
+  if (errorStatus >= 500) {
+    return true;
+  }
+  
+  return false;
 }
 
 const PREPROMPT_INSTRUCTION = `
@@ -147,25 +206,37 @@ export class ChatService {
   private async api<T>(
     endpoint: string,
     method: 'GET' | 'POST' = 'GET',
-    body?: any
+    body?: any,
+    retryCount: number = 0
   ): Promise<T> {
     const startTime = Date.now();
     const requestId = `${method}_${endpoint}_${startTime}`;
+    const attempt = retryCount + 1;
     
     try {
-      console.log(`[${requestId}] Starting request:`, {
-        endpoint,
-        method,
-        hasBody: !!body,
-        bodySize: body ? JSON.stringify(body).length : 0,
-        timeout: API_TIMEOUT,
-      });
+      if (retryCount > 0) {
+        console.log(`[${requestId}] Retry attempt ${attempt}/${MAX_RETRIES}:`, {
+          endpoint,
+          method,
+          previousAttempt: retryCount,
+        });
+      } else {
+        console.log(`[${requestId}] Starting request:`, {
+          endpoint,
+          method,
+          hasBody: !!body,
+          bodySize: body ? JSON.stringify(body).length : 0,
+          timeout: API_TIMEOUT,
+        });
+      }
 
       // Get valid token (will refresh if needed)
       const tokenStartTime = Date.now();
       const token = await this.getValidToken();
       const tokenTime = Date.now() - tokenStartTime;
-      console.log(`[${requestId}] Token obtained in ${tokenTime}ms`);
+      if (retryCount === 0) {
+        console.log(`[${requestId}] Token obtained in ${tokenTime}ms`);
+      }
 
       const options: any = {
         method,
@@ -192,6 +263,7 @@ export class ChatService {
         statusText: response.statusText,
         fetchTime: `${fetchTime}ms`,
         totalTime: `${Date.now() - startTime}ms`,
+        attempt,
         headers: Object.fromEntries(response.headers.entries()),
       });
 
@@ -200,15 +272,27 @@ export class ChatService {
         const errorText = await response.text();
         const errorTextTime = Date.now() - errorTextStart;
         
+        const error = new Error(`Request failed: ${response.status} ${errorText}`);
+        (error as any).status = response.status;
+        
         console.error(`[${requestId}] Request failed:`, {
           status: response.status,
           statusText: response.statusText,
           errorText: errorText.substring(0, 500),
           errorTextReadTime: `${errorTextTime}ms`,
           totalTime: `${Date.now() - startTime}ms`,
+          attempt,
         });
         
-        throw new Error(`Request failed: ${response.status} ${errorText}`);
+        // Check if we should retry
+        if (retryCount < MAX_RETRIES && isRetryableError(error)) {
+          const delay = RETRY_DELAY_BASE * Math.pow(2, retryCount); // Exponential backoff
+          console.log(`[${requestId}] Retrying after ${delay}ms (attempt ${attempt}/${MAX_RETRIES + 1})`);
+          await sleep(delay);
+          return this.api<T>(endpoint, method, body, retryCount + 1);
+        }
+        
+        throw error;
       }
 
       const readStartTime = Date.now();
@@ -217,13 +301,23 @@ export class ChatService {
       const data = text ? JSON.parse(text) : null;
       
       const totalTime = Date.now() - startTime;
-      console.log(`[${requestId}] Request completed successfully:`, {
-        responseSize: text.length,
-        readTime: `${readTime}ms`,
-        totalTime: `${totalTime}ms`,
-        tokenTime: `${tokenTime}ms`,
-        fetchTime: `${fetchTime}ms`,
-      });
+      if (retryCount > 0) {
+        console.log(`[${requestId}] Request succeeded on retry attempt ${attempt}:`, {
+          responseSize: text.length,
+          readTime: `${readTime}ms`,
+          totalTime: `${totalTime}ms`,
+          tokenTime: `${tokenTime}ms`,
+          fetchTime: `${fetchTime}ms`,
+        });
+      } else {
+        console.log(`[${requestId}] Request completed successfully:`, {
+          responseSize: text.length,
+          readTime: `${readTime}ms`,
+          totalTime: `${totalTime}ms`,
+          tokenTime: `${tokenTime}ms`,
+          fetchTime: `${fetchTime}ms`,
+        });
+      }
       
       return data;
     } catch (error: any) {
@@ -235,9 +329,30 @@ export class ChatService {
           totalTime: `${totalTime}ms`,
           endpoint,
           method,
+          attempt,
           error: error.message,
         });
+        
+        // Check if we should retry on timeout
+        if (retryCount < MAX_RETRIES) {
+          const delay = RETRY_DELAY_BASE * Math.pow(2, retryCount); // Exponential backoff
+          console.log(`[${requestId}] Retrying after timeout (${delay}ms delay, attempt ${attempt}/${MAX_RETRIES + 1})`);
+          await sleep(delay);
+          return this.api<T>(endpoint, method, body, retryCount + 1);
+        }
+        
         throw new Error(`Request timeout after ${API_TIMEOUT}ms: ${endpoint}`);
+      }
+      
+      // Check if we should retry on other retryable errors
+      if (retryCount < MAX_RETRIES && isRetryableError(error)) {
+        const delay = RETRY_DELAY_BASE * Math.pow(2, retryCount); // Exponential backoff
+        console.log(`[${requestId}] Retrying after error (${delay}ms delay, attempt ${attempt}/${MAX_RETRIES + 1}):`, {
+          error: error.message,
+          errorName: error.name,
+        });
+        await sleep(delay);
+        return this.api<T>(endpoint, method, body, retryCount + 1);
       }
       
       console.error(`[${requestId}] Request error:`, {
@@ -247,6 +362,8 @@ export class ChatService {
         totalTime: `${totalTime}ms`,
         endpoint,
         method,
+        attempt,
+        willRetry: retryCount < MAX_RETRIES && isRetryableError(error),
       });
       
       throw error;

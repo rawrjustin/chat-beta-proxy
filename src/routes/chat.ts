@@ -264,7 +264,10 @@ router.post('/chat', async (req: Request, res: Response) => {
         }
         if (message.role !== 'user' && message.role !== 'assistant') {
           return res.status(400).json({
-            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`,
+            received: message.role,
+            receivedType: typeof message.role,
+            hint: message.role === 'ai' ? 'Use "assistant" instead of "ai"' : undefined
           });
         }
         if (typeof message.content !== 'string') {
@@ -377,7 +380,10 @@ router.post('/initial-message', async (req: Request, res: Response) => {
         }
         if (message.role !== 'user' && message.role !== 'assistant') {
           return res.status(400).json({
-            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`,
+            received: message.role,
+            receivedType: typeof message.role,
+            hint: message.role === 'ai' ? 'Use "assistant" instead of "ai"' : undefined
           });
         }
         if (typeof message.content !== 'string') {
@@ -506,7 +512,10 @@ router.post('/followups', async (req: Request, res: Response) => {
         }
         if (message.role !== 'user' && message.role !== 'assistant') {
           return res.status(400).json({
-            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`
+            error: `conversation_history[${i}].role must be either 'user' or 'assistant'`,
+            received: message.role,
+            receivedType: typeof message.role,
+            hint: message.role === 'ai' ? 'Use "assistant" instead of "ai"' : undefined
           });
         }
         if (typeof message.content !== 'string') {
