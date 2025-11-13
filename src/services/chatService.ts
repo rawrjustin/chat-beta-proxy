@@ -15,7 +15,8 @@ const PREPROMPT_MODEL = process.env.PREPROMPT_MODEL || 'gpt-4o-mini';
 // Use LLM Gateway API with predefined prompt
 const PREPROMPT_ENDPOINT =
   process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
-const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1_vulgar';
+const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
+const DOGMA_CONFIG_ID = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
@@ -309,19 +310,27 @@ export class ChatService {
 
   /**
    * Generate contextual pre-prompts via gpt-4o-mini using LLM Gateway API
+   * @param userTurn - The user's message
+   * @param assistantTurn - The assistant's response
+   * @param configId - Optional character config ID to determine which prompt to use
    */
-  async generatePreprompts(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
+  async generatePreprompts(userTurn: string, assistantTurn: string, configId?: string): Promise<Preprompt[]> {
     const prepromptStartTime = Date.now();
     const prepromptRequestId = `preprompt_${prepromptStartTime}`;
     
     try {
       const token = await this.getValidToken();
 
+      // Use vulgar prompt for Dogma character, regular prompt for all others
+      const promptName = configId === DOGMA_CONFIG_ID 
+        ? 'contextual_followups_v1_vulgar' 
+        : PREPROMPT_NAME;
+
       // Use LLM Gateway API format with predefined prompt_name
       // The prompt template 'contextual_followups_v1' should handle the instruction formatting
       const payload: any = {
         model: PREPROMPT_MODEL,
-        prompt_name: PREPROMPT_NAME,
+        prompt_name: promptName,
         inputs: {
           user_turn: userTurn,
           assistant_turn: assistantTurn,
@@ -334,7 +343,8 @@ export class ChatService {
       console.log(`[${prepromptRequestId}] [generatePreprompts] Request details:`, {
         endpoint: PREPROMPT_ENDPOINT,
         model: PREPROMPT_MODEL,
-        prompt_name: PREPROMPT_NAME,
+        prompt_name: promptName,
+        configId: configId || 'none',
         payloadKeys: Object.keys(payload),
         inputs: payload.inputs,
         hasToken: !!token,
@@ -499,9 +509,12 @@ export class ChatService {
 
   /**
    * Call LLM Gateway API to generate contextual follow-ups
+   * @param userTurn - The user's message
+   * @param assistantTurn - The assistant's response
+   * @param configId - Optional character config ID to determine which prompt to use
    */
-  async getFollowUps(userTurn: string, assistantTurn: string): Promise<Preprompt[]> {
-    return this.generatePreprompts(userTurn, assistantTurn);
+  async getFollowUps(userTurn: string, assistantTurn: string, configId?: string): Promise<Preprompt[]> {
+    return this.generatePreprompts(userTurn, assistantTurn, configId);
   }
 
   private buildFallbackPreprompts(userTurn: string, assistantTurn: string): Preprompt[] {

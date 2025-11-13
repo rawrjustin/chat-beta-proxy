@@ -112,6 +112,7 @@ export interface ProxyChatResponse {
 export interface FollowUpsRequest {
   user_turn: string;
   assistant_turn: string;
+  config_id?: string;
 }
 
 export interface FollowUpsResponse {

@@ -193,7 +193,8 @@ router.post('/sessions', async (req: Request, res: Response) => {
         if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
           preprompts = await chatService.generatePreprompts(
             greetingMessage,
-            chatResponse.text_response_cleaned || chatResponse.ai || ''
+            chatResponse.text_response_cleaned || chatResponse.ai || '',
+            config_id
           );
         }
       } catch (error) {
@@ -250,7 +251,8 @@ router.post('/chat', async (req: Request, res: Response) => {
       if (input && (response.ai || response.text_response_cleaned)) {
         preprompts = await chatService.generatePreprompts(
           input,
-          response.text_response_cleaned || response.ai || ''
+          response.text_response_cleaned || response.ai || '',
+          config_id
         );
       }
     } catch (error) {
@@ -335,7 +337,8 @@ router.post('/initial-message', async (req: Request, res: Response) => {
       if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
         preprompts = await chatService.generatePreprompts(
           greetingMessage,
-          chatResponse.text_response_cleaned || chatResponse.ai || ''
+          chatResponse.text_response_cleaned || chatResponse.ai || '',
+          config_id
         );
       }
     } catch (error) {
@@ -363,7 +366,7 @@ router.post('/initial-message', async (req: Request, res: Response) => {
 // POST /api/followups - Generate contextual follow-up options
 router.post('/followups', async (req: Request, res: Response) => {
   try {
-    const { user_turn, assistant_turn } = req.body as FollowUpsRequest;
+    const { user_turn, assistant_turn, config_id } = req.body as FollowUpsRequest;
 
     if (!user_turn || !assistant_turn) {
       return res.status(400).json({
@@ -372,7 +375,7 @@ router.post('/followups', async (req: Request, res: Response) => {
     }
 
     const chatService = getChatService();
-    const preprompts = await chatService.getFollowUps(user_turn, assistant_turn);
+    const preprompts = await chatService.getFollowUps(user_turn, assistant_turn, config_id);
 
     res.json({
       preprompts,
