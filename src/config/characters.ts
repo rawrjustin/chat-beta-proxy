@@ -175,6 +175,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Dogma: Mama didn\'t raise no b',
     description: 'Dogma: Mama didn\'t raise no b',
     display_order: 25,
+    avatar_url: '/images/dogma.png',
   },
 ];
 
