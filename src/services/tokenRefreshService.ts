@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { jwtDecode } from 'jwt-decode';
 import { isTokenExpired, getTokenExpiryTime, getUserFromToken } from '../utils/tokenUtils';
 
 interface RefreshTokenResponse {
@@ -29,12 +30,21 @@ export class TokenRefreshService {
    * Get current access token, refresh if needed
    */
   async getValidAccessToken(): Promise<string> {
+    const startTime = Date.now();
+    
     if (!isTokenExpired(this.accessToken)) {
+      const checkTime = Date.now() - startTime;
+      if (checkTime > 10) {
+        console.log(`[Token] Token validation took ${checkTime}ms (token is valid)`);
+      }
       return this.accessToken;
     }
 
-    console.log('Access token expired, refreshing...');
+    console.log('[Token] Access token expired or expiring soon, refreshing...');
+    const refreshStartTime = Date.now();
     await this.refreshAccessToken();
+    const refreshTime = Date.now() - refreshStartTime;
+    console.log(`[Token] Token refresh completed in ${refreshTime}ms`);
     return this.accessToken;
   }
 
@@ -55,7 +65,6 @@ export class TokenRefreshService {
       
       // Extract organizationId from access token if available
       try {
-        const { jwtDecode } = await import('jwt-decode');
         const decoded = jwtDecode<{ org_id?: string }>(this.accessToken);
         if (decoded.org_id) {
           body.organizationId = decoded.org_id;
@@ -155,7 +164,8 @@ export class TokenRefreshService {
       }
     }, intervalMs);
 
-    // Also do an immediate check
+    // Also do an immediate check (but don't block startup)
+    // This pre-warms the token so the first API call is faster
     this.getValidAccessToken().catch((error) => {
       console.error('Initial token validation failed:', error);
     });

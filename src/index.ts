@@ -48,6 +48,22 @@ if (userInfo?.userId) {
   console.warn('Could not extract user_id from initial token');
 }
 
+// Pre-validate and refresh token at startup to avoid first-request latency
+// This ensures the token is ready before the server accepts requests
+async function initializeToken() {
+  const initStartTime = Date.now();
+  console.log('🔐 Pre-validating token at startup...');
+  
+  try {
+    await tokenRefreshService.getValidAccessToken();
+    const initTime = Date.now() - initStartTime;
+    console.log(`✅ Token ready (took ${initTime}ms)`);
+  } catch (error) {
+    console.error('⚠️  Token initialization failed:', error);
+    console.error('   Server will start anyway, but first request may be slower');
+  }
+}
+
 // Start periodic token refresh (every 30 minutes by default)
 if (REFRESH_TOKEN) {
   console.log(`🔄 Starting automatic token refresh every ${TOKEN_REFRESH_INTERVAL} minutes`);
@@ -87,9 +103,10 @@ app.use('/admin', adminRoutes);
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`
+// Start server after token initialization
+initializeToken().then(() => {
+  app.listen(PORT, () => {
+    console.log(`
 🚀 Chat Proxy Server is running!
 
    Port: ${PORT}
@@ -105,7 +122,11 @@ app.listen(PORT, () => {
    - POST /api/chat
    - POST /api/followups
    - GET  /admin (password protected)
-  `);
+    `);
+  });
+}).catch((error) => {
+  console.error('❌ Failed to initialize server:', error);
+  process.exit(1);
 });
 
 export default app;
