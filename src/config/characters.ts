@@ -28,7 +28,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
     config_id: 'CHAR_7fc3c18a-cdfa-42f3-90f0-443cd013c5e0',
     name: 'Jesus',
-    description: 'Jesus',
+    description: 'Oh you thought I was dead huh?',
     display_order: 2,
     avatar_url: '/images/jesus.png',
   },
