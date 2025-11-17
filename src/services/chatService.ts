@@ -120,11 +120,78 @@ CONVERSATIONAL / CURIOSITY (last two):
 Return only the JSON object in the required order and shape.
 `.trim();
 
+// Simple in-memory cache for character configs
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+class SimpleCache<T> {
+  private cache: Map<string, CacheEntry<T>> = new Map();
+  private ttl: number; // Time to live in milliseconds
+
+  constructor(ttlMinutes: number = 30) {
+    this.ttl = ttlMinutes * 60 * 1000;
+  }
+
+  get(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      return null;
+    }
+
+    // Check if entry has expired
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data;
+  }
+
+  set(key: string, data: T): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  // Clean up expired entries periodically
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.timestamp > this.ttl) {
+        this.cache.delete(key);
+      }
+    }
+  }
+}
+
 export class ChatService {
   private tokenRefreshService: TokenRefreshService | null = null;
+  private configCache: SimpleCache<ConfigResponse>;
+  private cacheEnabled: boolean;
 
   constructor(tokenRefreshService?: TokenRefreshService) {
     this.tokenRefreshService = tokenRefreshService || null;
+    // Cache configs - TTL configurable via env var (default: 30 minutes)
+    // Set CONFIG_CACHE_TTL_MINUTES=0 to disable caching
+    const cacheTtlMinutes = process.env.CONFIG_CACHE_TTL_MINUTES 
+      ? parseInt(process.env.CONFIG_CACHE_TTL_MINUTES, 10) 
+      : 30;
+    this.cacheEnabled = cacheTtlMinutes > 0;
+    this.configCache = new SimpleCache<ConfigResponse>(cacheTtlMinutes);
+    
+    // Clean up expired cache entries every 10 minutes (if caching enabled)
+    if (this.cacheEnabled) {
+      setInterval(() => {
+        this.configCache.cleanup();
+      }, 10 * 60 * 1000);
+    }
   }
 
   /**
@@ -153,19 +220,24 @@ export class ChatService {
     const requestId = `${method}_${endpoint}_${startTime}`;
     
     try {
-      console.log(`[${requestId}] Starting request:`, {
-        endpoint,
-        method,
-        hasBody: !!body,
-        bodySize: body ? JSON.stringify(body).length : 0,
-        timeout: API_TIMEOUT,
-      });
+      // Reduced logging to save memory
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log(`[${requestId}] Starting request:`, {
+          endpoint,
+          method,
+          hasBody: !!body,
+          bodySize: body ? JSON.stringify(body).length : 0,
+          timeout: API_TIMEOUT,
+        });
+      }
 
       // Get valid token (will refresh if needed)
       const tokenStartTime = Date.now();
       const token = await this.getValidToken();
       const tokenTime = Date.now() - tokenStartTime;
-      console.log(`[${requestId}] Token obtained in ${tokenTime}ms`);
+      if (process.env.DEBUG_LOGGING === 'true' && tokenTime > 100) {
+        console.log(`[${requestId}] Token obtained in ${tokenTime}ms`);
+      }
 
       const options: any = {
         method,
@@ -187,43 +259,55 @@ export class ChatService {
       ]) as any;
       const fetchTime = Date.now() - fetchStartTime;
       
-      console.log(`[${requestId}] Response received:`, {
-        status: response.status,
-        statusText: response.statusText,
-        fetchTime: `${fetchTime}ms`,
-        totalTime: `${Date.now() - startTime}ms`,
-        headers: Object.fromEntries(response.headers.entries()),
-      });
+      // Only log headers in debug mode (they can be large)
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log(`[${requestId}] Response received:`, {
+          status: response.status,
+          statusText: response.statusText,
+          fetchTime: `${fetchTime}ms`,
+          totalTime: `${Date.now() - startTime}ms`,
+        });
+      }
 
       if (!response.ok) {
-        const errorTextStart = Date.now();
         const errorText = await response.text();
-        const errorTextTime = Date.now() - errorTextStart;
+        // Limit error text to save memory
+        const errorPreview = errorText.length > 500 ? errorText.substring(0, 500) + '...' : errorText;
         
         console.error(`[${requestId}] Request failed:`, {
           status: response.status,
           statusText: response.statusText,
-          errorText: errorText.substring(0, 500),
-          errorTextReadTime: `${errorTextTime}ms`,
+          error: errorPreview,
           totalTime: `${Date.now() - startTime}ms`,
         });
         
-        throw new Error(`Request failed: ${response.status} ${errorText}`);
+        throw new Error(`Request failed: ${response.status} ${errorPreview}`);
       }
 
       const readStartTime = Date.now();
       const text = await response.text();
       const readTime = Date.now() - readStartTime;
+      
+      // Limit response size to prevent memory issues (50MB max)
+      const MAX_RESPONSE_SIZE = 50 * 1024 * 1024; // 50MB
+      if (text.length > MAX_RESPONSE_SIZE) {
+        throw new Error(`Response too large: ${text.length} bytes (max: ${MAX_RESPONSE_SIZE})`);
+      }
+      
       const data = text ? JSON.parse(text) : null;
       
       const totalTime = Date.now() - startTime;
-      console.log(`[${requestId}] Request completed successfully:`, {
-        responseSize: text.length,
-        readTime: `${readTime}ms`,
-        totalTime: `${totalTime}ms`,
-        tokenTime: `${tokenTime}ms`,
-        fetchTime: `${fetchTime}ms`,
-      });
+      // Only log detailed timing in debug mode
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log(`[${requestId}] Request completed:`, {
+          responseSize: text.length,
+          readTime: `${readTime}ms`,
+          totalTime: `${totalTime}ms`,
+        });
+      } else if (totalTime > 5000) {
+        // Only log slow requests in production
+        console.log(`[${requestId}] Slow request: ${totalTime}ms (${endpoint})`);
+      }
       
       return data;
     } catch (error: any) {
@@ -254,7 +338,23 @@ export class ChatService {
   }
 
   async getConfig(configId: string): Promise<ConfigResponse> {
-    return this.api<ConfigResponse>(`/genie/config/${configId}`);
+    // Check cache first (if caching enabled)
+    if (this.cacheEnabled) {
+      const cached = this.configCache.get(configId);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    // Fetch from API
+    const config = await this.api<ConfigResponse>(`/genie/config/${configId}`);
+    
+    // Cache the result (if caching enabled)
+    if (this.cacheEnabled) {
+      this.configCache.set(configId, config);
+    }
+    
+    return config;
   }
 
   async createSession(request: CreateSessionRequest): Promise<CreateSessionResponse> {
@@ -340,17 +440,17 @@ export class ChatService {
         response_format: { type: 'json_object' },
       };
       
-      console.log(`[${prepromptRequestId}] [generatePreprompts] Request details:`, {
-        endpoint: PREPROMPT_ENDPOINT,
-        model: PREPROMPT_MODEL,
-        prompt_name: promptName,
-        configId: configId || 'none',
-        payloadKeys: Object.keys(payload),
-        inputs: payload.inputs,
-        conversationHistoryPairs: conversationHistory.length,
-        hasToken: !!token,
-        timeout: PREPROMPT_TIMEOUT,
-      });
+      // Reduced logging - only log in debug mode
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log(`[${prepromptRequestId}] [generatePreprompts] Request:`, {
+          endpoint: PREPROMPT_ENDPOINT,
+          model: PREPROMPT_MODEL,
+          prompt_name: promptName,
+          configId: configId || 'none',
+          conversationHistoryPairs: conversationHistory.length,
+          timeout: PREPROMPT_TIMEOUT,
+        });
+      }
 
       const fetchStartTime = Date.now();
       // Use Promise.race to implement timeout for node-fetch v2
@@ -367,35 +467,30 @@ export class ChatService {
       ]) as any;
       const fetchTime = Date.now() - fetchStartTime;
       
-      console.log(`[${prepromptRequestId}] Preprompt response received:`, {
-        status: response.status,
-        statusText: response.statusText,
-        fetchTime: `${fetchTime}ms`,
-        totalTime: `${Date.now() - prepromptStartTime}ms`,
-      });
+      // Only log in debug mode
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log(`[${prepromptRequestId}] Preprompt response:`, {
+          status: response.status,
+          fetchTime: `${fetchTime}ms`,
+          totalTime: `${Date.now() - prepromptStartTime}ms`,
+        });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
         const totalTime = Date.now() - prepromptStartTime;
+        // Limit error logging to save memory
+        const errorPreview = errorText.length > 500 ? errorText.substring(0, 500) + '...' : errorText;
         console.error(`[${prepromptRequestId}] [generatePreprompts] API Error: ${response.status}`, {
           endpoint: PREPROMPT_ENDPOINT,
-          model: PREPROMPT_MODEL,
           status: response.status,
-          statusText: response.statusText,
-          error: errorText.substring(0, 500),
-          payload: JSON.stringify(payload).substring(0, 200),
-          fetchTime: `${fetchTime}ms`,
+          error: errorPreview,
           totalTime: `${totalTime}ms`,
         });
         throw new Error(`Preprompt generation failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('[generatePreprompts] Response received:', {
-        hasData: !!data,
-        dataKeys: data ? Object.keys(data) : [],
-        responseStructure: JSON.stringify(data).substring(0, 300),
-      });
       
       // LLM Gateway API returns { data: { response: "..." } }
       // Try multiple response formats
@@ -406,16 +501,21 @@ export class ChatService {
         data?.data?.content ??
         null;
 
-      console.log('[generatePreprompts] Extracted content:', {
-        hasContent: !!content,
-        contentType: typeof content,
-        contentLength: typeof content === 'string' ? content.length : 0,
-        contentPreview: typeof content === 'string' ? content.substring(0, 200) : null,
-      });
+      // Only log in debug mode
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.log('[generatePreprompts] Extracted content:', {
+          hasContent: !!content,
+          contentLength: typeof content === 'string' ? content.length : 0,
+        });
+      }
 
       if (!content || typeof content !== 'string') {
+        // Only stringify in debug mode to save memory
+        const errorData = process.env.DEBUG_LOGGING === 'true' 
+          ? JSON.stringify(data).substring(0, 500)
+          : 'data present but invalid';
         console.error('[generatePreprompts] No valid content found in response:', {
-          data: JSON.stringify(data).substring(0, 500),
+          data: errorData,
         });
         throw new Error('Preprompt generation returned empty content');
       }
@@ -429,21 +529,20 @@ export class ChatService {
         // Remove closing code block marker
         cleanedContent = cleanedContent.replace(/\n?```\s*$/i, '');
         cleanedContent = cleanedContent.trim();
-        console.log('[generatePreprompts] Stripped markdown code blocks:', {
-          originalLength: content.length,
-          cleanedLength: cleanedContent.length,
-          cleanedPreview: cleanedContent.substring(0, 200),
-        });
+        if (process.env.DEBUG_LOGGING === 'true') {
+          console.log('[generatePreprompts] Stripped markdown code blocks');
+        }
       }
 
       let parsed: PrepromptPayload;
       try {
         // Parse the cleaned JSON content
         parsed = typeof cleanedContent === 'string' ? JSON.parse(cleanedContent) : cleanedContent;
-        console.log('[generatePreprompts] Parsed JSON successfully:', {
-          hasPreprompts: !!parsed?.preprompts,
-          prepromptsCount: parsed?.preprompts?.length || 0,
-        });
+        if (process.env.DEBUG_LOGGING === 'true') {
+          console.log('[generatePreprompts] Parsed JSON:', {
+            prepromptsCount: parsed?.preprompts?.length || 0,
+          });
+        }
       } catch (error) {
         console.error('[generatePreprompts] JSON parse error:', {
           error: (error as Error).message,
@@ -453,8 +552,12 @@ export class ChatService {
       }
 
       if (!parsed?.preprompts || !Array.isArray(parsed.preprompts)) {
+        // Only stringify in debug mode to save memory
+        const errorData = process.env.DEBUG_LOGGING === 'true'
+          ? JSON.stringify(parsed).substring(0, 500)
+          : 'invalid structure';
         console.error('[generatePreprompts] Invalid preprompts structure:', {
-          parsed: JSON.stringify(parsed).substring(0, 500),
+          parsed: errorData,
         });
         throw new Error('Preprompt payload missing required preprompts array');
       }
@@ -469,22 +572,13 @@ export class ChatService {
         )
         .slice(0, 4);
 
-      console.log('[generatePreprompts] Sanitized preprompts:', {
-        originalCount: parsed.preprompts.length,
-        sanitizedCount: sanitized.length,
-        types: sanitized.map(p => p.type),
-      });
-
       if (sanitized.length !== 4) {
         console.error('[generatePreprompts] Wrong number of preprompts:', {
           expected: 4,
           got: sanitized.length,
-          preprompts: JSON.stringify(sanitized),
         });
         throw new Error('Expected exactly 4 preprompts from generator');
       }
-
-      console.log('[generatePreprompts] Successfully generated preprompts');
       return sanitized;
     } catch (error: any) {
       const totalTime = Date.now() - prepromptStartTime;

@@ -78,7 +78,8 @@ initChatService(tokenRefreshService);
 
 // Middleware
 app.use(cors()); // Enable CORS for all origins (customize if needed)
-app.use(express.json()); // Parse JSON request bodies
+// Limit request body size to prevent memory issues (10MB max)
+app.use(express.json({ limit: '10mb' })); // Parse JSON request bodies
 app.use(requestLogger); // Log all requests
 
 // Serve static files (images, etc.)
