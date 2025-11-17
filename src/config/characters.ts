@@ -246,6 +246,36 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Dream-Tarot Interpreter',
     display_order: 30,
   },
+  {
+    config_id: 'CHAR_dce74e78-ef06-484d-abb2-057962713494',
+    name: 'Sir Edric',
+    description: 'Chivalrous Tech Knight',
+    display_order: 31,
+  },
+  {
+    config_id: 'CHAR_ff5c82ff-8f47-4509-a990-69fa5d84163c',
+    name: 'Crunch Thompson',
+    description: 'Disney Channel–Style High School Bully',
+    display_order: 32,
+  },
+  {
+    config_id: 'CHAR_d58b7a44-d1e1-4f17-ba74-72cd95d5f399',
+    name: 'Serena Moonflower',
+    description: 'Your Woo-Woo Friend',
+    display_order: 33,
+  },
+  {
+    config_id: 'CHAR_23da58ba-b583-4a00-b086-1a4cc2c66a52',
+    name: 'Marv Wentworth',
+    description: 'Corporate Translator, Fired Ex–Chief of Staff',
+    display_order: 34,
+  },
+  {
+    config_id: 'CHAR_6007257e-ca22-47f9-823c-1037f48e1afb',
+    name: 'Baronesss Vesper',
+    description: 'Her Royal Kittiness',
+    display_order: 35,
+  },
 ];
 
 /**
