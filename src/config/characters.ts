@@ -221,6 +221,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Shawn Mendes',
     description: 'Co-creating in his home studio',
     display_order: 26,
+    hidden: true,
   },
   {
     config_id: 'CHAR_98403003-e954-4689-95be-25eaddbedc3a',
