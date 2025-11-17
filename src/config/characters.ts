@@ -17,24 +17,39 @@ export interface CharacterDefinition {
 
 /**
  * Get S3 URL for a character image
- * Uses S3_BUCKET_BASE_URL environment variable if set, otherwise constructs from bucket name
- * Format: https://{bucket-name}.s3.{region}.amazonaws.com/{filename}
- * Or: https://{cloudfront-domain}/{filename} if using CloudFront
+ * 
+ * Configuration options (in order of precedence):
+ * 1. S3_BUCKET_BASE_URL - Full base URL (e.g., "https://genies-character-profile-images-dev.s3.us-west-2.amazonaws.com")
+ *    This is the RECOMMENDED approach. Get this from AWS S3 console:
+ *    - Open your bucket → Click any image → Copy the "Object URL" (without the filename)
+ *    - Or use CloudFront domain if configured
+ * 
+ * 2. S3_BUCKET_NAME + AWS_REGION - Constructs URL automatically
+ *    Format: https://{bucket-name}.s3.{region}.amazonaws.com/{filename}
+ * 
+ * Example environment variables:
+ *   S3_BUCKET_BASE_URL=https://genies-character-profile-images-dev.s3.us-west-2.amazonaws.com
+ *   OR
+ *   S3_BUCKET_NAME=genies-character-profile-images-dev
+ *   AWS_REGION=us-west-2
  */
 function getS3ImageUrl(filename: string): string {
+  // Option 1: Use explicit base URL (RECOMMENDED - most reliable)
   const baseUrl = process.env.S3_BUCKET_BASE_URL;
   
   if (baseUrl) {
     // Remove trailing slash if present
     const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-    return `${cleanBaseUrl}/${filename}`;
+    return `${cleanBaseUrl}/${encodeURIComponent(filename)}`;
   }
   
-  // Default to public S3 URL format
-  // You can customize the region if needed (defaults to us-west-2 for Oregon)
+  // Option 2: Construct from bucket name and region
   const bucketName = process.env.S3_BUCKET_NAME || 'genies-character-profile-images-dev';
   const region = process.env.AWS_REGION || 'us-west-2';
-  return `https://${bucketName}.s3.${region}.amazonaws.com/${filename}`;
+  
+  // Try the most common S3 URL format first
+  // Format: https://{bucket-name}.s3.{region}.amazonaws.com/{filename}
+  return `https://${bucketName}.s3.${region}.amazonaws.com/${encodeURIComponent(filename)}`;
 }
 
 // Define available characters here
@@ -347,5 +362,21 @@ export function getAvailableCharacters(includeHidden: boolean = false): Characte
  */
 export function getAllCharacters(): CharacterDefinition[] {
   return getAvailableCharacters(true);
+}
+
+/**
+ * Check if a character ID exists (including hidden characters)
+ * Useful for validating character IDs from URL parameters
+ */
+export function characterExists(configId: string): boolean {
+  return AVAILABLE_CHARACTERS.some(char => char.config_id === configId);
+}
+
+/**
+ * Get a specific character definition by ID (including hidden characters)
+ * Returns null if character doesn't exist
+ */
+export function getCharacterById(configId: string): CharacterDefinition | null {
+  return AVAILABLE_CHARACTERS.find(char => char.config_id === configId) || null;
 }
 

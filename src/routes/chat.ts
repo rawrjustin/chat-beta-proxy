@@ -1,12 +1,64 @@
 import { Router, Request, Response } from 'express';
 import { getChatService } from '../services/chatService';
 import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt, ConversationMessage } from '../types/chat';
-import { getAvailableCharacters, getAvailableCharacterIds } from '../config/characters';
+import { getAvailableCharacters, getAvailableCharacterIds, getCharacterById, characterExists } from '../config/characters';
 import { stripCurlyBracketTags } from '../utils/textUtils';
 
 const router = Router();
 
+// GET /api/character/:configId - Get character metadata (including hidden characters)
+// This endpoint allows frontend to validate character IDs from URL parameters
+router.get('/character/:configId', async (req: Request, res: Response) => {
+  try {
+    const { configId } = req.params;
+
+    if (!configId) {
+      return res.status(400).json({ error: 'Config ID is required' });
+    }
+
+    // Check if character exists in our config (including hidden ones)
+    const character = getCharacterById(configId);
+    
+    if (!character) {
+      return res.status(404).json({
+        error: 'Character not found',
+        message: `Character ${configId} is not in the available characters list`,
+        configId
+      });
+    }
+
+    // Try to fetch the full config from upstream API
+    const chatService = getChatService();
+    let config = null;
+    try {
+      config = await chatService.getConfig(configId);
+    } catch (error) {
+      console.warn(`[GET /api/character/${configId}] Failed to fetch config from upstream API, but character exists in config`);
+    }
+
+    // Return character metadata (including hidden status)
+    res.json({
+      config_id: character.config_id,
+      name: character.name || null,
+      description: character.description || null,
+      display_order: character.display_order || null,
+      avatar_url: character.avatar_url || null,
+      hidden: character.hidden || false,
+      exists: true,
+      config: config // Full config from upstream API (may be null if fetch failed)
+    });
+  } catch (error: any) {
+    console.error('Error fetching character:', error);
+    res.status(500).json({
+      error: 'Failed to fetch character',
+      message: error.message
+    });
+  }
+});
+
 // GET /api/config/:configId - Fetch character config
+// Returns the upstream config merged with local metadata (name, description, avatar_url)
+// This ensures hidden characters have proper names/descriptions when accessed via direct URL
 router.get('/config/:configId', async (req: Request, res: Response) => {
   try {
     const { configId } = req.params;
@@ -15,28 +67,64 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Config ID is required' });
     }
 
-    const chatService = getChatService();
-    const config = await chatService.getConfig(configId);
-
-    res.json(config);
-  } catch (error: any) {
-    console.error('Error fetching config:', error);
-    
-    // Check if the error is a 404 from the upstream API
-    const isNotFound = error.message && (
-      error.message.includes('404') || 
-      error.message.includes('not found') ||
-      error.message.includes('Not Found')
-    );
-    
-    if (isNotFound) {
-      console.warn(`[GET /api/config/${req.params.configId}] Character config not found on upstream API. This character may have been removed or the ID may be incorrect.`);
+    // Check if character exists (including hidden ones) - this allows hidden characters to work
+    const characterDefinition = getCharacterById(configId);
+    if (!characterDefinition) {
       return res.status(404).json({
-        error: 'Config not found',
-        message: `Character config ${req.params.configId} not found on upstream API`,
-        configId: req.params.configId
+        error: 'Character not found',
+        message: `Character ${configId} is not in the available characters list`,
+        configId
       });
     }
+
+    const chatService = getChatService();
+    let upstreamConfig = null;
+    
+    try {
+      upstreamConfig = await chatService.getConfig(configId);
+    } catch (error: any) {
+      // Check if the error is a 404 from the upstream API
+      const isNotFound = error.message && (
+        error.message.includes('404') || 
+        error.message.includes('not found') ||
+        error.message.includes('Not Found')
+      );
+      
+      if (isNotFound) {
+        console.warn(`[GET /api/config/${configId}] Character config not found on upstream API, but character exists in local config`);
+        // Still return local metadata even if upstream config fails
+        return res.json({
+          config_id: characterDefinition.config_id,
+          name: characterDefinition.name || null,
+          description: characterDefinition.description || null,
+          display_order: characterDefinition.display_order || null,
+          avatar_url: characterDefinition.avatar_url || null,
+          hidden: characterDefinition.hidden || false,
+          // Upstream config is null, but we still have local metadata
+          ...(upstreamConfig || {})
+        });
+      }
+      
+      // For other errors, rethrow
+      throw error;
+    }
+
+    // Merge local metadata with upstream config
+    // Prioritize local metadata (name, description, avatar_url) over upstream
+    const mergedConfig = {
+      ...upstreamConfig,
+      // Override with local metadata if available
+      config_id: characterDefinition.config_id, // Always use local config_id
+      name: characterDefinition.name || upstreamConfig?.name || null,
+      description: characterDefinition.description || upstreamConfig?.description || null,
+      display_order: characterDefinition.display_order || null,
+      avatar_url: characterDefinition.avatar_url || upstreamConfig?.avatar_url || null,
+      hidden: characterDefinition.hidden || false,
+    };
+
+    res.json(mergedConfig);
+  } catch (error: any) {
+    console.error('Error fetching config:', error);
     
     // For other errors, return 500
     res.status(500).json({
