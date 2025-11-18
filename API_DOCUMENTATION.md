@@ -424,7 +424,7 @@ Get the character's initial greeting message when entering a chat room. This end
 ```
 
 **Behavior:**
-- **New Chat** (no `conversation_history`/`previous_messages` or empty array): Sends "I just walked in on you, greet me and tell me your current scenario"
+- **New Chat** (no `conversation_history`/`previous_messages` or empty array): Sends "I just walked in on you, greet me and conversationally tell me a little about what you're up to as if I was a friend"
 - **Returning User** (with `conversation_history` or `previous_messages`): Sends a message acknowledging the user's return and includes the conversation history
 
 **Note:** Use `conversation_history` (with `role: 'user' | 'assistant'`) instead of `previous_messages` (with `role: 'user' | 'ai'`) for consistency with other endpoints.
@@ -520,7 +520,7 @@ const response = await fetch('http://localhost:3000/api/initial-message', {
 ```
 
 **Note:** 
-- For **new chats**, this endpoint sends an invisible message ("I just walked in on you, greet me and tell me your current scenario") to the character.
+- For **new chats**, this endpoint sends an invisible message ("I just walked in on you, greet me and conversationally tell me a little about what you're up to as if I was a friend") to the character.
 - For **returning users**, it sends a message acknowledging their return and includes the conversation history.
 - The user never sees these invisible messages - only the character's response is returned and should be displayed.
 

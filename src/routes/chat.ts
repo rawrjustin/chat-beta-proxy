@@ -263,7 +263,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
     const session = await chatService.createSession({ config_id });
 
     // Automatically send greeting message to initialize the conversation
-    const greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+    const greetingMessage = "I just walked in on you, greet me and conversationally tell me a little about what you're up to as if I was a friend";
     let greetingResponse: any = null;
     
     try {
@@ -507,7 +507,7 @@ router.post('/initial-message', async (req: Request, res: Response) => {
       greetingMessage = `[The user has returned, greet the user again understanding that they've come back, these are the previous messages between you: ${formattedMessages}]`;
     } else {
       // New chat - use the original greeting
-      greetingMessage = "I just walked in on you, greet me and tell me your current scenario";
+      greetingMessage = "I just walked in on you, greet me and conversationally tell me a little about what you're up to as if I was a friend";
     }
     
     const chatResponse = await chatService.sendChat({
