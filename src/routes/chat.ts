@@ -111,15 +111,34 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
 
     // Merge local metadata with upstream config
     // Prioritize local metadata (name, description, avatar_url) over upstream
+    // Always use local metadata if it exists, even if it's an empty string
+    const localName = characterDefinition.name !== undefined && characterDefinition.name !== null 
+      ? characterDefinition.name 
+      : (upstreamConfig?.name || null);
+    const localDescription = characterDefinition.description !== undefined && characterDefinition.description !== null
+      ? characterDefinition.description 
+      : (upstreamConfig?.description || null);
+    const localAvatarUrl = characterDefinition.avatar_url !== undefined && characterDefinition.avatar_url !== null
+      ? characterDefinition.avatar_url 
+      : (upstreamConfig?.avatar_url || null);
+    
+    // Log for debugging hidden characters
+    if (characterDefinition.hidden) {
+      console.log(`[GET /api/config/${configId}] Hidden character - local name: "${localName}", local description: "${localDescription}", upstream name: "${upstreamConfig?.name || 'null'}"`);
+    }
+    
     const mergedConfig = {
       ...upstreamConfig,
-      // Override with local metadata if available
+      // CRITICAL: Override with local metadata - always prioritize local definitions
+      // This ensures hidden characters show correct names/descriptions even if upstream has different values
       config_id: characterDefinition.config_id, // Always use local config_id
-      name: characterDefinition.name || upstreamConfig?.name || null,
-      description: characterDefinition.description || upstreamConfig?.description || null,
-      display_order: characterDefinition.display_order || null,
-      avatar_url: characterDefinition.avatar_url || upstreamConfig?.avatar_url || null,
-      hidden: characterDefinition.hidden || false,
+      name: localName,
+      description: localDescription,
+      display_order: characterDefinition.display_order !== undefined && characterDefinition.display_order !== null
+        ? characterDefinition.display_order 
+        : (upstreamConfig?.display_order || null),
+      avatar_url: localAvatarUrl,
+      hidden: characterDefinition.hidden !== undefined ? characterDefinition.hidden : false,
     };
 
     res.json(mergedConfig);
