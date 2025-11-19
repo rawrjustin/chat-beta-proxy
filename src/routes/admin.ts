@@ -17,7 +17,12 @@ const checkPassword = (req: Request, res: Response, next: Function) => {
   // Always check query parameter first for admin password (required for PUT/DELETE)
   // Fall back to body.password only for backward compatibility with GET requests
   // For PUT/DELETE, req.body.password is the character password, not the admin password!
-  const queryPassword = typeof req.query.password === 'string' ? req.query.password : req.query.password?.[0];
+  let queryPassword: string | undefined;
+  if (typeof req.query.password === 'string') {
+    queryPassword = req.query.password;
+  } else if (Array.isArray(req.query.password) && req.query.password.length > 0) {
+    queryPassword = String(req.query.password[0]);
+  }
   const bodyPassword = req.method === 'GET' ? req.body.password : undefined;
   const password = queryPassword || bodyPassword;
   
