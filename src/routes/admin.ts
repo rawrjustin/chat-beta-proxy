@@ -11,8 +11,15 @@ console.log('  PUT    /admin/api/characters/:config_id/password');
 console.log('  DELETE /admin/api/characters/:config_id/password');
 
 // Simple password check middleware
+// NOTE: For PUT/DELETE requests, the body contains the character password,
+// so we MUST check query parameter first for admin authentication
 const checkPassword = (req: Request, res: Response, next: Function) => {
-  const password = req.body.password || req.query.password;
+  // Always check query parameter first for admin password (required for PUT/DELETE)
+  // Fall back to body.password only for backward compatibility with GET requests
+  // For PUT/DELETE, req.body.password is the character password, not the admin password!
+  const queryPassword = typeof req.query.password === 'string' ? req.query.password : req.query.password?.[0];
+  const bodyPassword = req.method === 'GET' ? req.body.password : undefined;
+  const password = queryPassword || bodyPassword;
   
   if (password === ADMIN_PASSWORD) {
     next();
