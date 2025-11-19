@@ -449,29 +449,8 @@ router.get('/', checkPassword, (req: Request, res: Response) => {
   res.send(html);
 });
 
-// Admin API endpoint to get all characters (including hidden)
-router.get('/api/characters', checkPassword, (req: Request, res: Response) => {
-  const allCharacters = getAllCharacters();
-  const passwordService = getPasswordService();
-  
-  // Add password metadata to each character
-  const charactersWithPasswordMetadata = allCharacters.map(char => {
-    const passwordMetadata = passwordService.getPasswordMetadata(char.config_id);
-    return {
-      ...char,
-      ...passwordMetadata,
-    };
-  });
-  
-  res.json({
-    characters: charactersWithPasswordMetadata,
-    total: allCharacters.length,
-    visible: allCharacters.filter(c => !c.hidden).length,
-    hidden: allCharacters.filter(c => c.hidden).length,
-  });
-});
-
 // PUT /admin/api/characters/:config_id/password - Set or update password
+// NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
 router.put('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
   try {
     const { config_id } = req.params;
@@ -510,6 +489,7 @@ router.put('/api/characters/:config_id/password', checkPassword, (req: Request, 
 });
 
 // DELETE /admin/api/characters/:config_id/password - Remove password
+// NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
 router.delete('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
   try {
     const { config_id } = req.params;
@@ -538,6 +518,29 @@ router.delete('/api/characters/:config_id/password', checkPassword, (req: Reques
       message: error.message
     });
   }
+});
+
+// Admin API endpoint to get all characters (including hidden)
+// NOTE: This route is defined AFTER the password routes to avoid route conflicts
+router.get('/api/characters', checkPassword, (req: Request, res: Response) => {
+  const allCharacters = getAllCharacters();
+  const passwordService = getPasswordService();
+  
+  // Add password metadata to each character
+  const charactersWithPasswordMetadata = allCharacters.map(char => {
+    const passwordMetadata = passwordService.getPasswordMetadata(char.config_id);
+    return {
+      ...char,
+      ...passwordMetadata,
+    };
+  });
+  
+  res.json({
+    characters: charactersWithPasswordMetadata,
+    total: allCharacters.length,
+    visible: allCharacters.filter(c => !c.hidden).length,
+    hidden: allCharacters.filter(c => c.hidden).length,
+  });
 });
 
 export default router;

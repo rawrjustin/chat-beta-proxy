@@ -149,6 +149,132 @@ data.characters.forEach(char => {
 
 ---
 
+### Set/Update Character Password
+
+Set or update a password for a character to password-protect chat access.
+
+**Endpoint:** `PUT /admin/api/characters/:config_id/password`
+
+**Full URL Format:** `/admin/api/characters/{config_id}/password?password={admin_password}`
+
+**Authentication:** Required (admin password)
+
+**URL Parameters:**
+- `config_id` (string, required) - Character configuration ID (e.g., `CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e`)
+
+**Query Parameters:**
+- `password` (string, required) - Admin password (currently `genies`)
+
+**Request Body:**
+```json
+{
+  "password": "<character_password>",
+  "hint": "<optional_hint>"
+}
+```
+
+**Note:** The `password` field in the request body is the character password (what users will enter), NOT the admin password. The admin password goes in the query parameter.
+
+**Response:**
+```json
+{
+  "config_id": "CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e",
+  "password_required": true,
+  "updated_at": "2025-01-15T12:34:56.000Z"
+}
+```
+
+**Example:**
+```javascript
+const configId = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
+const adminPassword = 'genies';
+const characterPassword = 'mycharacterpassword';
+
+const response = await fetch(
+  `http://localhost:3000/admin/api/characters/${configId}/password?password=${adminPassword}`,
+  {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      password: characterPassword,
+      hint: 'Think of a color'
+    })
+  }
+);
+
+if (!response.ok) {
+  const error = await response.json();
+  console.error('Error:', error);
+} else {
+  const result = await response.json();
+  console.log('Password set:', result);
+}
+```
+
+**Error Responses:**
+- `400` - Missing or invalid password in request body, or config_id missing
+- `401` - Invalid admin password (returns HTML login page)
+- `404` - Character not found
+- `500` - Server error
+
+---
+
+### Remove Character Password
+
+Remove password protection from a character.
+
+**Endpoint:** `DELETE /admin/api/characters/:config_id/password`
+
+**Full URL Format:** `/admin/api/characters/{config_id}/password?password={admin_password}`
+
+**Authentication:** Required (admin password)
+
+**URL Parameters:**
+- `config_id` (string, required) - Character configuration ID (e.g., `CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e`)
+
+**Query Parameters:**
+- `password` (string, required) - Admin password (currently `genies`)
+
+**Response:**
+```json
+{
+  "config_id": "CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e",
+  "password_required": false,
+  "updated_at": "2025-01-15T12:34:56.000Z"
+}
+```
+
+**Example:**
+```javascript
+const configId = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
+const adminPassword = 'genies';
+
+const response = await fetch(
+  `http://localhost:3000/admin/api/characters/${configId}/password?password=${adminPassword}`,
+  {
+    method: 'DELETE'
+  }
+);
+
+if (!response.ok) {
+  const error = await response.json();
+  console.error('Error:', error);
+} else {
+  const result = await response.json();
+  console.log('Password removed:', result);
+}
+```
+
+**Error Responses:**
+- `400` - Missing config_id
+- `401` - Invalid admin password (returns HTML login page)
+- `404` - Character not found
+- `500` - Server error
+
+---
+
 ## Request/Response Examples
 
 ### Fetch All Characters (Including Hidden)
