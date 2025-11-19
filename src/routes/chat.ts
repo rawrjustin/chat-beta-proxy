@@ -30,6 +30,7 @@ function validatePasswordAccess(
       return null; // Token is valid
     }
     // Token is invalid or expired
+    console.log(`[validatePasswordAccess] Invalid/expired token for ${configId}`);
     return {
       status: 401,
       error: 'Invalid or expired access token',
@@ -43,6 +44,7 @@ function validatePasswordAccess(
       return null; // Password is correct
     }
     // Password is incorrect
+    console.log(`[validatePasswordAccess] Invalid password for ${configId}`);
     return {
       status: 401,
       error: 'Invalid password',
@@ -51,6 +53,7 @@ function validatePasswordAccess(
   }
   
   // No token or password provided
+  console.log(`[validatePasswordAccess] Password required for ${configId} but no token/password provided`);
   return {
     status: 401,
     error: 'Password required',
