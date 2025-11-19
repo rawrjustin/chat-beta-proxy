@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Character password configuration
@@ -34,11 +36,73 @@ export class PasswordService {
   // Default token TTL: 1 hour (3600 seconds)
   private readonly DEFAULT_TOKEN_TTL_SECONDS = 3600;
   
+  // File path for persisting passwords
+  private readonly PASSWORDS_FILE = path.join(process.cwd(), 'data', 'character-passwords.json');
+  
   constructor() {
+    // Load passwords from file on startup
+    this.loadPasswordsFromFile();
+    
     // Clean up expired tokens every 5 minutes
     setInterval(() => {
       this.cleanupExpiredTokens();
     }, 5 * 60 * 1000);
+  }
+  
+  /**
+   * Load passwords from file on startup
+   */
+  private loadPasswordsFromFile(): void {
+    try {
+      // Ensure data directory exists
+      const dataDir = path.dirname(this.PASSWORDS_FILE);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      // Load passwords from file if it exists
+      if (fs.existsSync(this.PASSWORDS_FILE)) {
+        const fileContent = fs.readFileSync(this.PASSWORDS_FILE, 'utf-8');
+        const passwordsData: Record<string, CharacterPassword> = JSON.parse(fileContent);
+        
+        // Restore passwords to in-memory map
+        for (const [configId, passwordConfig] of Object.entries(passwordsData)) {
+          this.passwords.set(configId, passwordConfig);
+        }
+        
+        console.log(`[PasswordService] Loaded ${this.passwords.size} password(s) from file`);
+      }
+    } catch (error) {
+      console.error('[PasswordService] Error loading passwords from file:', error);
+      // Continue with empty passwords if file load fails
+    }
+  }
+  
+  /**
+   * Save passwords to file
+   */
+  private savePasswordsToFile(): void {
+    try {
+      // Ensure data directory exists
+      const dataDir = path.dirname(this.PASSWORDS_FILE);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      // Convert map to object for JSON serialization
+      const passwordsData: Record<string, CharacterPassword> = {};
+      for (const [configId, passwordConfig] of this.passwords.entries()) {
+        passwordsData[configId] = passwordConfig;
+      }
+      
+      // Write to file atomically (write to temp file, then rename)
+      const tempFile = `${this.PASSWORDS_FILE}.tmp`;
+      fs.writeFileSync(tempFile, JSON.stringify(passwordsData, null, 2), 'utf-8');
+      fs.renameSync(tempFile, this.PASSWORDS_FILE);
+    } catch (error) {
+      console.error('[PasswordService] Error saving passwords to file:', error);
+      // Don't throw - continue even if save fails
+    }
   }
 
   /**
@@ -61,6 +125,9 @@ export class PasswordService {
     };
     
     this.passwords.set(configId, passwordConfig);
+    
+    // Persist to file
+    this.savePasswordsToFile();
   }
 
   /**
@@ -70,6 +137,9 @@ export class PasswordService {
     this.passwords.delete(configId);
     // Also invalidate all tokens for this character
     this.invalidateTokensForCharacter(configId);
+    
+    // Persist to file
+    this.savePasswordsToFile();
   }
 
   /**

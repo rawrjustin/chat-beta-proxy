@@ -22,3 +22,6 @@ npm-debug.log*
 
 # Demo/reference code
 demo/
+
+# Password storage (contains sensitive data)
+data/
