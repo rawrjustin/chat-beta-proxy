@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { getAllCharacters } from '../config/characters';
+import { getAllCharacters, getCharacterById, characterExists } from '../config/characters';
+import { getPasswordService } from '../services/passwordService';
 
 const router = Router();
 const ADMIN_PASSWORD = 'genies';
@@ -451,12 +452,92 @@ router.get('/', checkPassword, (req: Request, res: Response) => {
 // Admin API endpoint to get all characters (including hidden)
 router.get('/api/characters', checkPassword, (req: Request, res: Response) => {
   const allCharacters = getAllCharacters();
+  const passwordService = getPasswordService();
+  
+  // Add password metadata to each character
+  const charactersWithPasswordMetadata = allCharacters.map(char => {
+    const passwordMetadata = passwordService.getPasswordMetadata(char.config_id);
+    return {
+      ...char,
+      ...passwordMetadata,
+    };
+  });
+  
   res.json({
-    characters: allCharacters,
+    characters: charactersWithPasswordMetadata,
     total: allCharacters.length,
     visible: allCharacters.filter(c => !c.hidden).length,
     hidden: allCharacters.filter(c => c.hidden).length,
   });
+});
+
+// PUT /admin/api/characters/:config_id/password - Set or update password
+router.put('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
+  try {
+    const { config_id } = req.params;
+    const { password, hint } = req.body;
+
+    if (!config_id) {
+      return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    if (!password || typeof password !== 'string' || password.trim().length === 0) {
+      return res.status(400).json({ error: 'password is required and cannot be empty' });
+    }
+
+    // Check if character exists
+    if (!characterExists(config_id)) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const passwordService = getPasswordService();
+    passwordService.setPassword(config_id, password, hint);
+
+    const metadata = passwordService.getPasswordMetadata(config_id);
+
+    res.json({
+      config_id,
+      password_required: metadata.password_required,
+      updated_at: metadata.password_updated_at,
+    });
+  } catch (error: any) {
+    console.error('Error setting password:', error);
+    res.status(500).json({
+      error: 'Failed to set password',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /admin/api/characters/:config_id/password - Remove password
+router.delete('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
+  try {
+    const { config_id } = req.params;
+
+    if (!config_id) {
+      return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    // Check if character exists
+    if (!characterExists(config_id)) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const passwordService = getPasswordService();
+    passwordService.removePassword(config_id);
+
+    res.json({
+      config_id,
+      password_required: false,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Error removing password:', error);
+    res.status(500).json({
+      error: 'Failed to remove password',
+      message: error.message
+    });
+  }
 });
 
 export default router;

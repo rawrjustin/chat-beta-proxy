@@ -3,8 +3,60 @@ import { getChatService } from '../services/chatService';
 import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsRequest, Preprompt, ConversationMessage } from '../types/chat';
 import { getAvailableCharacters, getAvailableCharacterIds, getCharacterById, characterExists } from '../config/characters';
 import { stripCurlyBracketTags } from '../utils/textUtils';
+import { getPasswordService } from '../services/passwordService';
 
 const router = Router();
+
+/**
+ * Helper function to validate password access for a character
+ * Returns null if access is granted, or an error response object if access is denied
+ */
+function validatePasswordAccess(
+  configId: string,
+  characterAccessToken?: string,
+  characterPassword?: string
+): { status: number; error: string; password_required?: boolean } | null {
+  const passwordService = getPasswordService();
+  
+  // If character doesn't require a password, allow access
+  if (!passwordService.hasPassword(configId)) {
+    return null;
+  }
+  
+  // Character requires password - check if token or password is provided
+  if (characterAccessToken) {
+    // Validate token
+    if (passwordService.validateToken(characterAccessToken, configId)) {
+      return null; // Token is valid
+    }
+    // Token is invalid or expired
+    return {
+      status: 401,
+      error: 'Invalid or expired access token',
+      password_required: true,
+    };
+  }
+  
+  if (characterPassword) {
+    // Validate password
+    if (passwordService.verifyPassword(configId, characterPassword)) {
+      return null; // Password is correct
+    }
+    // Password is incorrect
+    return {
+      status: 401,
+      error: 'Invalid password',
+      password_required: true,
+    };
+  }
+  
+  // No token or password provided
+  return {
+    status: 401,
+    error: 'Password required',
+    password_required: true,
+  };
+}
 
 // GET /api/character/:configId - Get character metadata (including hidden characters)
 // This endpoint allows frontend to validate character IDs from URL parameters
@@ -36,7 +88,11 @@ router.get('/character/:configId', async (req: Request, res: Response) => {
       console.warn(`[GET /api/character/${configId}] Failed to fetch config from upstream API, but character exists in config`);
     }
 
-    // Return character metadata (including hidden status)
+    // Get password metadata
+    const passwordService = getPasswordService();
+    const passwordMetadata = passwordService.getPasswordMetadata(configId);
+
+    // Return character metadata (including hidden status and password metadata)
     res.json({
       config_id: character.config_id,
       name: character.name || null,
@@ -45,7 +101,8 @@ router.get('/character/:configId', async (req: Request, res: Response) => {
       avatar_url: character.avatar_url || null,
       hidden: character.hidden || false,
       exists: true,
-      config: config // Full config from upstream API (may be null if fetch failed)
+      config: config, // Full config from upstream API (may be null if fetch failed)
+      ...passwordMetadata, // Include password_required, password_hint, password_updated_at
     });
   } catch (error: any) {
     console.error('Error fetching character:', error);
@@ -127,6 +184,10 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
       console.log(`[GET /api/config/${configId}] Hidden character - local name: "${localName}", local description: "${localDescription}", upstream name: "${upstreamConfig?.name || 'null'}"`);
     }
     
+    // Get password metadata
+    const passwordService = getPasswordService();
+    const passwordMetadata = passwordService.getPasswordMetadata(configId);
+    
     const mergedConfig = {
       ...upstreamConfig,
       // CRITICAL: Override with local metadata - always prioritize local definitions
@@ -139,6 +200,7 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
         : (upstreamConfig?.display_order || null),
       avatar_url: localAvatarUrl,
       hidden: characterDefinition.hidden !== undefined ? characterDefinition.hidden : false,
+      ...passwordMetadata, // Include password_required, password_hint, password_updated_at
     };
 
     res.json(mergedConfig);
@@ -209,6 +271,10 @@ router.get('/characters', async (req: Request, res: Response) => {
         console.log(`[characters] Character ${definition.name || config_id}: API config has avatar_url=${config.avatar_url} but it's not being used`);
       }
       
+      // Get password metadata
+      const passwordService = getPasswordService();
+      const passwordMetadata = passwordService.getPasswordMetadata(config_id);
+      
       const character = {
         config_id, // Always use the hardcoded config_id from our definitions
         name: definition.name || config?.name || null,
@@ -220,6 +286,7 @@ router.get('/characters', async (req: Request, res: Response) => {
           // Override any config_id in the nested config to match our definition
           config_id: config_id
         } : null, // Full character config from API (may be null if fetch failed)
+        ...passwordMetadata, // Include password_required, password_hint, password_updated_at
       };
       
       return character;
@@ -272,10 +339,26 @@ router.post('/configs', async (req: Request, res: Response) => {
 // POST /api/sessions - Create new chat session
 router.post('/sessions', async (req: Request, res: Response) => {
   try {
-    const { config_id } = req.body as CreateSessionRequest;
+    const { 
+      config_id,
+      character_access_token,
+      character_password
+    } = req.body as CreateSessionRequest & {
+      character_access_token?: string;
+      character_password?: string;
+    };
 
     if (!config_id) {
       return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    // Validate password access
+    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    if (accessError) {
+      return res.status(accessError.status).json({
+        error: accessError.error,
+        password_required: accessError.password_required,
+      });
     }
 
     const chatService = getChatService();
@@ -341,12 +424,31 @@ router.post('/sessions', async (req: Request, res: Response) => {
 // POST /api/chat - Send chat message
 router.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { session_id, input, config_id, conversation_history } = req.body as ProxyChatRequest;
+    const { 
+      session_id, 
+      input, 
+      config_id, 
+      conversation_history,
+      character_access_token,
+      character_password
+    } = req.body as ProxyChatRequest & {
+      character_access_token?: string;
+      character_password?: string;
+    };
 
     // session_id can be empty string (API will create new session)
     if (session_id === undefined || !input || !config_id) {
       return res.status(400).json({
         error: 'session_id (can be empty), input, and config_id are required'
+      });
+    }
+
+    // Validate password access
+    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    if (accessError) {
+      return res.status(accessError.status).json({
+        error: accessError.error,
+        password_required: accessError.password_required,
       });
     }
 
@@ -452,17 +554,30 @@ router.post('/initial-message', async (req: Request, res: Response) => {
       session_id, 
       config_id, 
       previous_messages,
-      conversation_history
+      conversation_history,
+      character_access_token,
+      character_password
     } = req.body as { 
       session_id: string; 
       config_id: string; 
       previous_messages?: Array<{ role: 'user' | 'ai'; content: string }>; // Legacy format
       conversation_history?: ConversationMessage[]; // New format
+      character_access_token?: string;
+      character_password?: string;
     };
 
     if (!session_id || !config_id) {
       return res.status(400).json({
         error: 'session_id and config_id are required'
+      });
+    }
+
+    // Validate password access
+    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    if (accessError) {
+      return res.status(accessError.status).json({
+        error: accessError.error,
+        password_required: accessError.password_required,
       });
     }
 
@@ -583,6 +698,63 @@ router.post('/initial-message', async (req: Request, res: Response) => {
     console.error('Error getting initial message:', error);
     res.status(500).json({
       error: 'Failed to get initial message',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/characters/:config_id/verify-password - Verify password and get access token
+router.post('/characters/:config_id/verify-password', async (req: Request, res: Response) => {
+  try {
+    const { config_id } = req.params;
+    const { password } = req.body;
+
+    if (!config_id) {
+      return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ error: 'password is required' });
+    }
+
+    // Check if character exists
+    if (!characterExists(config_id)) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const passwordService = getPasswordService();
+
+    // Check if character has a password
+    if (!passwordService.hasPassword(config_id)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Character does not require a password' 
+      });
+    }
+
+    // Verify password
+    if (!passwordService.verifyPassword(config_id, password)) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Invalid password' 
+      });
+    }
+
+    // Generate access token
+    const tokenInfo = passwordService.generateAccessToken(config_id);
+
+    res.json({
+      success: true,
+      access_token: tokenInfo.token,
+      expires_at: tokenInfo.expires_at,
+      ttl_seconds: tokenInfo.ttl_seconds,
+      password_required: true,
+    });
+  } catch (error: any) {
+    console.error('Error verifying password:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify password',
       message: error.message
     });
   }
