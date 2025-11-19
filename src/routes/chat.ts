@@ -24,16 +24,34 @@ async function validatePasswordAccess(
   }
   
   // Character requires password - check if token or password is provided
+  // Priority: valid token > password > invalid token
   if (characterAccessToken) {
-    // Validate token
-    if (passwordService.validateToken(characterAccessToken, configId)) {
+    // Validate token first
+    const isValid = passwordService.validateToken(characterAccessToken, configId);
+    if (isValid) {
       return null; // Token is valid
     }
-    // Token is invalid or expired
-    console.log(`[validatePasswordAccess] Invalid/expired token for ${configId}`);
+    // Token is invalid or expired - fall back to password if provided
+    console.log(`[validatePasswordAccess] Invalid/expired token for ${configId}. Token provided: ${characterAccessToken.substring(0, 8)}...`);
+    if (characterPassword) {
+      // Fall back to password validation
+      console.log(`[validatePasswordAccess] Falling back to password validation for ${configId}`);
+      if (await passwordService.verifyPassword(configId, characterPassword)) {
+        return null; // Password is correct
+      }
+      // Password is also incorrect
+      console.log(`[validatePasswordAccess] Invalid password for ${configId}`);
+      return {
+        status: 401,
+        error: 'Invalid password',
+        password_required: true,
+      };
+    }
+    // Token invalid and no password provided
+    console.log(`[validatePasswordAccess] Invalid token and no password provided for ${configId}`);
     return {
       status: 401,
-      error: 'Invalid or expired access token',
+      error: 'Invalid or expired access token. Please verify your password again.',
       password_required: true,
     };
   }
@@ -719,9 +737,14 @@ router.post('/initial-message', async (req: Request, res: Response) => {
 
 // POST /api/characters/:config_id/verify-password - Verify password and get access token
 router.post('/characters/:config_id/verify-password', async (req: Request, res: Response) => {
+  const requestId = Math.random().toString(36).substring(7);
+  const startTime = Date.now();
+  
   try {
     const { config_id } = req.params;
     const { password } = req.body;
+
+    console.log(`[verify-password] Request ${requestId} for ${config_id} started`);
 
     if (!config_id) {
       return res.status(400).json({ error: 'config_id is required' });
@@ -733,6 +756,7 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
 
     // Check if character exists
     if (!characterExists(config_id)) {
+      console.log(`[verify-password] Request ${requestId} - Character not found: ${config_id}`);
       return res.status(404).json({ error: 'Character not found' });
     }
 
@@ -740,6 +764,7 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
 
     // Check if character has a password
     if (!(await passwordService.hasPassword(config_id))) {
+      console.log(`[verify-password] Request ${requestId} - Character does not require password: ${config_id}`);
       return res.status(400).json({ 
         success: false,
         error: 'Character does not require a password' 
@@ -747,7 +772,9 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
     }
 
     // Verify password
-    if (!(await passwordService.verifyPassword(config_id, password))) {
+    const isValid = await passwordService.verifyPassword(config_id, password);
+    if (!isValid) {
+      console.log(`[verify-password] Request ${requestId} - Invalid password for ${config_id}`);
       return res.status(401).json({ 
         success: false,
         error: 'Invalid password' 
@@ -756,6 +783,9 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
 
     // Generate access token
     const tokenInfo = passwordService.generateAccessToken(config_id);
+    const duration = Date.now() - startTime;
+    
+    console.log(`[verify-password] Request ${requestId} - Password verified successfully for ${config_id}. Token generated: ${tokenInfo.token.substring(0, 8)}... (took ${duration}ms)`);
 
     res.json({
       success: true,
@@ -765,7 +795,8 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
       password_required: true,
     });
   } catch (error: any) {
-    console.error('Error verifying password:', error);
+    const duration = Date.now() - startTime;
+    console.error(`[verify-password] Request ${requestId} - Error verifying password (took ${duration}ms):`, error);
     res.status(500).json({
       success: false,
       error: 'Failed to verify password',

@@ -278,19 +278,24 @@ export class PasswordService {
     const accessToken = this.tokens.get(token);
     
     if (!accessToken) {
-      return false; // Token doesn't exist
+      console.log(`[validateToken] Token not found in memory. Token: ${token.substring(0, 8)}..., Config: ${configId}, Total tokens: ${this.tokens.size}`);
+      return false; // Token doesn't exist (likely server was restarted)
     }
     
     if (accessToken.config_id !== configId) {
+      console.log(`[validateToken] Token config mismatch. Token config: ${accessToken.config_id}, Request config: ${configId}`);
       return false; // Token is for a different character
     }
     
     if (Date.now() > accessToken.expires_at) {
       // Token expired, remove it
+      const expiredAt = new Date(accessToken.expires_at).toISOString();
+      console.log(`[validateToken] Token expired. Expired at: ${expiredAt}, Current time: ${new Date().toISOString()}`);
       this.tokens.delete(token);
       return false;
     }
     
+    console.log(`[validateToken] Token valid for ${configId}. Expires at: ${new Date(accessToken.expires_at).toISOString()}`);
     return true;
   }
 
