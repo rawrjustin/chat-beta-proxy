@@ -11,15 +11,15 @@ const router = Router();
  * Helper function to validate password access for a character
  * Returns null if access is granted, or an error response object if access is denied
  */
-function validatePasswordAccess(
+async function validatePasswordAccess(
   configId: string,
   characterAccessToken?: string,
   characterPassword?: string
-): { status: number; error: string; password_required?: boolean } | null {
+): Promise<{ status: number; error: string; password_required?: boolean } | null> {
   const passwordService = getPasswordService();
   
   // If character doesn't require a password, allow access
-  if (!passwordService.hasPassword(configId)) {
+  if (!(await passwordService.hasPassword(configId))) {
     return null;
   }
   
@@ -40,7 +40,7 @@ function validatePasswordAccess(
   
   if (characterPassword) {
     // Validate password
-    if (passwordService.verifyPassword(configId, characterPassword)) {
+    if (await passwordService.verifyPassword(configId, characterPassword)) {
       return null; // Password is correct
     }
     // Password is incorrect
@@ -155,7 +155,7 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
         
         // Get password metadata (even when upstream config fails)
         const passwordService = getPasswordService();
-        const passwordMetadata = passwordService.getPasswordMetadata(configId);
+        const passwordMetadata = await passwordService.getPasswordMetadata(configId);
         
         // Still return local metadata even if upstream config fails
         return res.json({
@@ -195,7 +195,7 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
     
     // Get password metadata
     const passwordService = getPasswordService();
-    const passwordMetadata = passwordService.getPasswordMetadata(configId);
+    const passwordMetadata = await passwordService.getPasswordMetadata(configId);
     
     const mergedConfig = {
       ...upstreamConfig,
@@ -282,7 +282,7 @@ router.get('/characters', async (req: Request, res: Response) => {
       
       // Get password metadata
       const passwordService = getPasswordService();
-      const passwordMetadata = passwordService.getPasswordMetadata(config_id);
+      const passwordMetadata = await passwordService.getPasswordMetadata(config_id);
       
       const character = {
         config_id, // Always use the hardcoded config_id from our definitions
@@ -362,7 +362,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
     }
 
     // Validate password access
-    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    const accessError = await validatePasswordAccess(config_id, character_access_token, character_password);
     if (accessError) {
       return res.status(accessError.status).json({
         error: accessError.error,
@@ -453,7 +453,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     }
 
     // Validate password access
-    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    const accessError = await validatePasswordAccess(config_id, character_access_token, character_password);
     if (accessError) {
       return res.status(accessError.status).json({
         error: accessError.error,
@@ -582,7 +582,7 @@ router.post('/initial-message', async (req: Request, res: Response) => {
     }
 
     // Validate password access
-    const accessError = validatePasswordAccess(config_id, character_access_token, character_password);
+    const accessError = await validatePasswordAccess(config_id, character_access_token, character_password);
     if (accessError) {
       return res.status(accessError.status).json({
         error: accessError.error,
@@ -734,7 +734,7 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
     const passwordService = getPasswordService();
 
     // Check if character has a password
-    if (!passwordService.hasPassword(config_id)) {
+    if (!(await passwordService.hasPassword(config_id))) {
       return res.status(400).json({ 
         success: false,
         error: 'Character does not require a password' 
@@ -742,7 +742,7 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
     }
 
     // Verify password
-    if (!passwordService.verifyPassword(config_id, password)) {
+    if (!(await passwordService.verifyPassword(config_id, password))) {
       return res.status(401).json({ 
         success: false,
         error: 'Invalid password' 

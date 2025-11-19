@@ -468,7 +468,7 @@ router.get('/', checkPassword, (req: Request, res: Response) => {
 
 // PUT /admin/api/characters/:config_id/password - Set or update password
 // NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
-router.put('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
+router.put('/api/characters/:config_id/password', checkPassword, async (req: Request, res: Response) => {
   try {
     console.log(`[PUT /admin/api/characters/:config_id/password] Request received for config_id: ${req.params.config_id}`);
     const { config_id } = req.params;
@@ -488,9 +488,9 @@ router.put('/api/characters/:config_id/password', checkPassword, (req: Request, 
     }
 
     const passwordService = getPasswordService();
-    passwordService.setPassword(config_id, password, hint);
+    await passwordService.setPassword(config_id, password, hint);
 
-    const metadata = passwordService.getPasswordMetadata(config_id);
+    const metadata = await passwordService.getPasswordMetadata(config_id);
 
     res.json({
       config_id,
@@ -508,7 +508,7 @@ router.put('/api/characters/:config_id/password', checkPassword, (req: Request, 
 
 // DELETE /admin/api/characters/:config_id/password - Remove password
 // NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
-router.delete('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
+router.delete('/api/characters/:config_id/password', checkPassword, async (req: Request, res: Response) => {
   try {
     console.log(`[DELETE /admin/api/characters/:config_id/password] Request received for config_id: ${req.params.config_id}`);
     const { config_id } = req.params;
@@ -523,7 +523,7 @@ router.delete('/api/characters/:config_id/password', checkPassword, (req: Reques
     }
 
     const passwordService = getPasswordService();
-    passwordService.removePassword(config_id);
+    await passwordService.removePassword(config_id);
 
     res.json({
       config_id,
@@ -541,18 +541,20 @@ router.delete('/api/characters/:config_id/password', checkPassword, (req: Reques
 
 // Admin API endpoint to get all characters (including hidden)
 // NOTE: This route is defined AFTER the password routes to avoid route conflicts
-router.get('/api/characters', checkPassword, (req: Request, res: Response) => {
+router.get('/api/characters', checkPassword, async (req: Request, res: Response) => {
   const allCharacters = getAllCharacters();
   const passwordService = getPasswordService();
   
   // Add password metadata to each character
-  const charactersWithPasswordMetadata = allCharacters.map(char => {
-    const passwordMetadata = passwordService.getPasswordMetadata(char.config_id);
-    return {
-      ...char,
-      ...passwordMetadata,
-    };
-  });
+  const charactersWithPasswordMetadata = await Promise.all(
+    allCharacters.map(async (char) => {
+      const passwordMetadata = await passwordService.getPasswordMetadata(char.config_id);
+      return {
+        ...char,
+        ...passwordMetadata,
+      };
+    })
+  );
   
   res.json({
     characters: charactersWithPasswordMetadata,

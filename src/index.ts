@@ -77,6 +77,23 @@ if (REFRESH_TOKEN) {
 // Initialize chat service with token refresh service
 initChatService(tokenRefreshService);
 
+// Initialize database (if DATABASE_URL is available)
+async function initializeDatabase() {
+  if (process.env.DATABASE_URL) {
+    try {
+      const { initializeDatabase: initDb } = await import('./services/database');
+      await initDb();
+      console.log('✅ Database initialized successfully');
+    } catch (error) {
+      console.error('⚠️  Database initialization failed:', error);
+      console.error('   Password protection will not work until database is configured');
+    }
+  } else {
+    console.log('ℹ️  DATABASE_URL not set - password protection will not persist across deployments');
+    console.log('   Add a PostgreSQL service in Railway to enable password persistence');
+  }
+}
+
 // Middleware
 app.use(cors()); // Enable CORS for all origins (customize if needed)
 // Limit request body size to prevent memory issues (10MB max)
@@ -108,8 +125,11 @@ app.use('/beta', betaRoutes);
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server after token initialization
-initializeToken().then(() => {
+// Start server after token and database initialization
+Promise.all([
+  initializeToken(),
+  initializeDatabase()
+]).then(() => {
   app.listen(PORT, () => {
     console.log(`
 🚀 Chat Proxy Server is running!

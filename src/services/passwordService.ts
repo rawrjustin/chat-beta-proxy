@@ -1,13 +1,12 @@
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { getDatabasePool, initializeDatabase } from './database';
 
 /**
  * Character password configuration
  */
 interface CharacterPassword {
   config_id: string;
-  password_hash: string; // Hashed password using bcrypt or similar
+  password_hash: string; // Hashed password using SHA-256
   hint: string | null;
   updated_at: string; // ISO timestamp
 }
@@ -23,25 +22,23 @@ interface AccessToken {
 
 /**
  * Service to manage character passwords and access tokens
- * Uses in-memory storage (can be replaced with database in production)
+ * Uses PostgreSQL database for password persistence (Railway)
+ * Tokens remain in-memory (short-lived, don't need persistence)
  */
 export class PasswordService {
-  // In-memory storage for character passwords
-  private passwords: Map<string, CharacterPassword> = new Map();
-  
-  // In-memory storage for access tokens
+  // In-memory storage for access tokens (short-lived, don't persist)
   // Key: token string, Value: AccessToken
   private tokens: Map<string, AccessToken> = new Map();
   
   // Default token TTL: 1 hour (3600 seconds)
   private readonly DEFAULT_TOKEN_TTL_SECONDS = 3600;
   
-  // File path for persisting passwords
-  private readonly PASSWORDS_FILE = path.join(process.cwd(), 'data', 'character-passwords.json');
+  // Track if database is available
+  private databaseAvailable: boolean = false;
   
   constructor() {
-    // Load passwords from file on startup
-    this.loadPasswordsFromFile();
+    // Initialize database connection and schema
+    this.initializeDatabaseConnection();
     
     // Clean up expired tokens every 5 minutes
     setInterval(() => {
@@ -50,124 +47,133 @@ export class PasswordService {
   }
   
   /**
-   * Load passwords from file on startup
+   * Initialize database connection
    */
-  private loadPasswordsFromFile(): void {
+  private async initializeDatabaseConnection(): Promise<void> {
     try {
-      // Ensure data directory exists
-      const dataDir = path.dirname(this.PASSWORDS_FILE);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
+      // Check if DATABASE_URL is available
+      if (!process.env.DATABASE_URL) {
+        console.warn('[PasswordService] DATABASE_URL not set - passwords will not persist across deployments');
+        console.warn('[PasswordService] Add a PostgreSQL service in Railway to enable password persistence');
+        this.databaseAvailable = false;
+        return;
       }
       
-      // Load passwords from file if it exists
-      if (fs.existsSync(this.PASSWORDS_FILE)) {
-        const fileContent = fs.readFileSync(this.PASSWORDS_FILE, 'utf-8');
-        const passwordsData: Record<string, CharacterPassword> = JSON.parse(fileContent);
-        
-        // Restore passwords to in-memory map
-        for (const [configId, passwordConfig] of Object.entries(passwordsData)) {
-          this.passwords.set(configId, passwordConfig);
-        }
-        
-        console.log(`[PasswordService] Loaded ${this.passwords.size} password(s) from file`);
-      }
+      // Initialize database schema
+      await initializeDatabase();
+      this.databaseAvailable = true;
+      console.log('[PasswordService] Database connection initialized');
     } catch (error) {
-      console.error('[PasswordService] Error loading passwords from file:', error);
-      // Continue with empty passwords if file load fails
+      console.error('[PasswordService] Failed to initialize database:', error);
+      this.databaseAvailable = false;
     }
   }
   
   /**
-   * Save passwords to file
-   */
-  private savePasswordsToFile(): void {
-    try {
-      // Ensure data directory exists
-      const dataDir = path.dirname(this.PASSWORDS_FILE);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      
-      // Convert map to object for JSON serialization
-      const passwordsData: Record<string, CharacterPassword> = {};
-      for (const [configId, passwordConfig] of this.passwords.entries()) {
-        passwordsData[configId] = passwordConfig;
-      }
-      
-      // Write to file atomically (write to temp file, then rename)
-      const tempFile = `${this.PASSWORDS_FILE}.tmp`;
-      fs.writeFileSync(tempFile, JSON.stringify(passwordsData, null, 2), 'utf-8');
-      fs.renameSync(tempFile, this.PASSWORDS_FILE);
-    } catch (error) {
-      console.error('[PasswordService] Error saving passwords to file:', error);
-      // Don't throw - continue even if save fails
-    }
-  }
-
-  /**
    * Set or update password for a character
    */
-  setPassword(configId: string, password: string, hint?: string | null): void {
+  async setPassword(configId: string, password: string, hint?: string | null): Promise<void> {
     if (!password || password.trim().length === 0) {
       throw new Error('Password cannot be empty');
     }
 
-    // Hash the password using SHA-256 (simple approach)
-    // In production, consider using bcrypt or argon2
+    // Hash the password using SHA-256
     const passwordHash = this.hashPassword(password);
+    const updatedAt = new Date().toISOString();
     
-    const passwordConfig: CharacterPassword = {
-      config_id: configId,
-      password_hash: passwordHash,
-      hint: hint || null,
-      updated_at: new Date().toISOString(),
-    };
-    
-    this.passwords.set(configId, passwordConfig);
-    
-    // Persist to file
-    this.savePasswordsToFile();
+    if (this.databaseAvailable) {
+      // Save to database
+      try {
+        const db = getDatabasePool();
+        await db.query(
+          `INSERT INTO character_passwords (config_id, password_hash, hint, updated_at)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (config_id) 
+           DO UPDATE SET password_hash = $2, hint = $3, updated_at = $4`,
+          [configId, passwordHash, hint || null, updatedAt]
+        );
+        console.log(`[PasswordService] Password set for ${configId} (saved to database)`);
+      } catch (error) {
+        console.error('[PasswordService] Error saving password to database:', error);
+        throw new Error('Failed to save password to database');
+      }
+    } else {
+      throw new Error('Database not available. Please add a PostgreSQL service in Railway.');
+    }
   }
 
   /**
    * Remove password for a character
    */
-  removePassword(configId: string): void {
-    this.passwords.delete(configId);
+  async removePassword(configId: string): Promise<void> {
+    if (this.databaseAvailable) {
+      try {
+        const db = getDatabasePool();
+        await db.query('DELETE FROM character_passwords WHERE config_id = $1', [configId]);
+        console.log(`[PasswordService] Password removed for ${configId}`);
+      } catch (error) {
+        console.error('[PasswordService] Error removing password from database:', error);
+        throw new Error('Failed to remove password from database');
+      }
+    } else {
+      throw new Error('Database not available. Please add a PostgreSQL service in Railway.');
+    }
+    
     // Also invalidate all tokens for this character
     this.invalidateTokensForCharacter(configId);
-    
-    // Persist to file
-    this.savePasswordsToFile();
   }
 
   /**
    * Check if a character has a password
    */
-  hasPassword(configId: string): boolean {
-    return this.passwords.has(configId);
+  async hasPassword(configId: string): Promise<boolean> {
+    if (!this.databaseAvailable) {
+      return false;
+    }
+    
+    try {
+      const db = getDatabasePool();
+      const result = await db.query(
+        'SELECT 1 FROM character_passwords WHERE config_id = $1 LIMIT 1',
+        [configId]
+      );
+      return result.rows.length > 0;
+    } catch (error) {
+      console.error('[PasswordService] Error checking password:', error);
+      return false;
+    }
   }
 
   /**
    * Get password hint for a character
    */
-  getHint(configId: string): string | null {
-    const passwordConfig = this.passwords.get(configId);
-    return passwordConfig?.hint || null;
+  async getHint(configId: string): Promise<string | null> {
+    if (!this.databaseAvailable) {
+      return null;
+    }
+    
+    try {
+      const db = getDatabasePool();
+      const result = await db.query(
+        'SELECT hint FROM character_passwords WHERE config_id = $1',
+        [configId]
+      );
+      return result.rows.length > 0 ? result.rows[0].hint : null;
+    } catch (error) {
+      console.error('[PasswordService] Error getting hint:', error);
+      return null;
+    }
   }
 
   /**
    * Get password metadata (for admin display)
    */
-  getPasswordMetadata(configId: string): {
+  async getPasswordMetadata(configId: string): Promise<{
     password_required: boolean;
     password_hint: string | null;
     password_updated_at: string | null;
-  } {
-    const passwordConfig = this.passwords.get(configId);
-    
-    if (!passwordConfig) {
+  }> {
+    if (!this.databaseAvailable) {
       return {
         password_required: false,
         password_hint: null,
@@ -175,25 +181,63 @@ export class PasswordService {
       };
     }
     
-    return {
-      password_required: true,
-      password_hint: passwordConfig.hint,
-      password_updated_at: passwordConfig.updated_at,
-    };
+    try {
+      const db = getDatabasePool();
+      const result = await db.query(
+        'SELECT hint, updated_at FROM character_passwords WHERE config_id = $1',
+        [configId]
+      );
+      
+      if (result.rows.length === 0) {
+        return {
+          password_required: false,
+          password_hint: null,
+          password_updated_at: null,
+        };
+      }
+      
+      const row = result.rows[0];
+      return {
+        password_required: true,
+        password_hint: row.hint,
+        password_updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+      };
+    } catch (error) {
+      console.error('[PasswordService] Error getting password metadata:', error);
+      return {
+        password_required: false,
+        password_hint: null,
+        password_updated_at: null,
+      };
+    }
   }
 
   /**
    * Verify password for a character
    */
-  verifyPassword(configId: string, password: string): boolean {
-    const passwordConfig = this.passwords.get(configId);
-    
-    if (!passwordConfig) {
-      return false; // No password set, so verification fails
+  async verifyPassword(configId: string, password: string): Promise<boolean> {
+    if (!this.databaseAvailable) {
+      return false;
     }
     
-    const passwordHash = this.hashPassword(password);
-    return passwordHash === passwordConfig.password_hash;
+    try {
+      const db = getDatabasePool();
+      const result = await db.query(
+        'SELECT password_hash FROM character_passwords WHERE config_id = $1',
+        [configId]
+      );
+      
+      if (result.rows.length === 0) {
+        return false; // No password set
+      }
+      
+      const storedHash = result.rows[0].password_hash;
+      const passwordHash = this.hashPassword(password);
+      return passwordHash === storedHash;
+    } catch (error) {
+      console.error('[PasswordService] Error verifying password:', error);
+      return false;
+    }
   }
 
   /**
@@ -284,29 +328,32 @@ export class PasswordService {
   /**
    * Get all characters with passwords (for admin)
    */
-  getAllPasswordConfigs(): Array<{
+  async getAllPasswordConfigs(): Promise<Array<{
     config_id: string;
     password_required: boolean;
     password_hint: string | null;
     password_updated_at: string | null;
-  }> {
-    const result: Array<{
-      config_id: string;
-      password_required: boolean;
-      password_hint: string | null;
-      password_updated_at: string | null;
-    }> = [];
-    
-    for (const [configId, passwordConfig] of this.passwords.entries()) {
-      result.push({
-        config_id: configId,
-        password_required: true,
-        password_hint: passwordConfig.hint,
-        password_updated_at: passwordConfig.updated_at,
-      });
+  }>> {
+    if (!this.databaseAvailable) {
+      return [];
     }
     
-    return result;
+    try {
+      const db = getDatabasePool();
+      const result = await db.query(
+        'SELECT config_id, hint, updated_at FROM character_passwords ORDER BY updated_at DESC'
+      );
+      
+      return result.rows.map(row => ({
+        config_id: row.config_id,
+        password_required: true,
+        password_hint: row.hint,
+        password_updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+      }));
+    } catch (error) {
+      console.error('[PasswordService] Error getting all password configs:', error);
+      return [];
+    }
   }
 }
 
@@ -319,4 +366,3 @@ export function getPasswordService(): PasswordService {
   }
   return passwordServiceInstance;
 }
-
