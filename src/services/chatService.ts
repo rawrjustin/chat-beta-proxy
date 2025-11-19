@@ -278,12 +278,29 @@ export class ChatService {
         // Limit error text to save memory
         const errorPreview = errorText.length > 500 ? errorText.substring(0, 500) + '...' : errorText;
         
-        console.error(`[${requestId}] Request failed:`, {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorPreview,
-          totalTime: `${Date.now() - startTime}ms`,
-        });
+        // For 404s on config endpoints, these are expected (some characters don't exist upstream)
+        // Only log as warning in debug mode, not as error
+        const isConfigEndpoint = endpoint.startsWith('/genie/config/');
+        const isNotFound = response.status === 404;
+        
+        if (isConfigEndpoint && isNotFound) {
+          // Only log in debug mode for config 404s
+          if (process.env.DEBUG_LOGGING === 'true') {
+            console.warn(`[${requestId}] Config not found (expected for some characters):`, {
+              status: response.status,
+              endpoint,
+              totalTime: `${Date.now() - startTime}ms`,
+            });
+          }
+        } else {
+          // Log other errors normally
+          console.error(`[${requestId}] Request failed:`, {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorPreview,
+            totalTime: `${Date.now() - startTime}ms`,
+          });
+        }
         
         throw new Error(`Request failed: ${response.status} ${errorPreview}`);
       }
@@ -328,14 +345,33 @@ export class ChatService {
         throw new Error(`Request timeout after ${API_TIMEOUT}ms: ${endpoint}`);
       }
       
-      console.error(`[${requestId}] Request error:`, {
-        error: error.message,
-        errorName: error.name,
-        errorStack: error.stack?.substring(0, 500),
-        totalTime: `${totalTime}ms`,
-        endpoint,
-        method,
-      });
+      // For 404s on config endpoints, these are expected - don't log as error
+      const isConfigEndpoint = endpoint.startsWith('/genie/config/');
+      const isNotFound = error.message && (
+        error.message.includes('404') || 
+        error.message.includes('not found') ||
+        error.message.includes('Not Found')
+      );
+      
+      if (isConfigEndpoint && isNotFound) {
+        // Only log in debug mode for config 404s
+        if (process.env.DEBUG_LOGGING === 'true') {
+          console.warn(`[${requestId}] Config not found (expected):`, {
+            endpoint,
+            totalTime: `${totalTime}ms`,
+          });
+        }
+      } else {
+        // Log other errors normally
+        console.error(`[${requestId}] Request error:`, {
+          error: error.message,
+          errorName: error.name,
+          errorStack: error.stack?.substring(0, 500),
+          totalTime: `${totalTime}ms`,
+          endpoint,
+          method,
+        });
+      }
       
       throw error;
     }
@@ -350,15 +386,35 @@ export class ChatService {
       }
     }
 
-    // Fetch from API
-    const config = await this.api<ConfigResponse>(`/genie/config/${configId}`);
-    
-    // Cache the result (if caching enabled)
-    if (this.cacheEnabled) {
-      this.configCache.set(configId, config);
+    try {
+      // Fetch from API
+      const config = await this.api<ConfigResponse>(`/genie/config/${configId}`);
+      
+      // Cache the result (if caching enabled)
+      if (this.cacheEnabled) {
+        this.configCache.set(configId, config);
+      }
+      
+      return config;
+    } catch (error: any) {
+      // Check if this is a 404 error (config not found)
+      const isNotFound = error.message && (
+        error.message.includes('404') || 
+        error.message.includes('not found') ||
+        error.message.includes('Not Found')
+      );
+      
+      if (isNotFound) {
+        // Create a specific error type for 404s that can be caught and handled gracefully
+        const notFoundError = new Error(`Config not found: ${configId}`);
+        (notFoundError as any).isNotFound = true;
+        (notFoundError as any).statusCode = 404;
+        throw notFoundError;
+      }
+      
+      // Re-throw other errors
+      throw error;
     }
-    
-    return config;
   }
 
   async createSession(request: CreateSessionRequest): Promise<CreateSessionResponse> {
@@ -378,8 +434,21 @@ export class ChatService {
       try {
         const config = await this.getConfig(configId);
         return { configId, config };
-      } catch (error) {
-        console.error(`Failed to fetch config for ${configId}:`, error);
+      } catch (error: any) {
+        // Handle 404s gracefully - these are expected for characters that don't exist upstream
+        if (error?.isNotFound || (error?.message && (
+          error.message.includes('404') || 
+          error.message.includes('not found') ||
+          error.message.includes('Not Found')
+        ))) {
+          // Only log as warning in debug mode, not as error
+          if (process.env.DEBUG_LOGGING === 'true') {
+            console.warn(`Config not found for ${configId} (this is expected for some characters)`);
+          }
+        } else {
+          // Log other errors normally
+          console.error(`Failed to fetch config for ${configId}:`, error);
+        }
         return { configId, config: null, error: error instanceof Error ? error.message : 'Unknown error' };
       }
     });

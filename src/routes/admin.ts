@@ -5,6 +5,11 @@ import { getPasswordService } from '../services/passwordService';
 const router = Router();
 const ADMIN_PASSWORD = 'genies';
 
+// Log route registration on module load
+console.log('[Admin Routes] Registering password management endpoints:');
+console.log('  PUT    /admin/api/characters/:config_id/password');
+console.log('  DELETE /admin/api/characters/:config_id/password');
+
 // Simple password check middleware
 const checkPassword = (req: Request, res: Response, next: Function) => {
   const password = req.body.password || req.query.password;
@@ -453,6 +458,7 @@ router.get('/', checkPassword, (req: Request, res: Response) => {
 // NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
 router.put('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
   try {
+    console.log(`[PUT /admin/api/characters/:config_id/password] Request received for config_id: ${req.params.config_id}`);
     const { config_id } = req.params;
     const { password, hint } = req.body;
 
@@ -492,6 +498,7 @@ router.put('/api/characters/:config_id/password', checkPassword, (req: Request, 
 // NOTE: This route must be defined BEFORE the GET /api/characters route to avoid conflicts
 router.delete('/api/characters/:config_id/password', checkPassword, (req: Request, res: Response) => {
   try {
+    console.log(`[DELETE /admin/api/characters/:config_id/password] Request received for config_id: ${req.params.config_id}`);
     const { config_id } = req.params;
 
     if (!config_id) {
