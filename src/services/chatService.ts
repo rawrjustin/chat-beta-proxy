@@ -20,8 +20,7 @@ const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
 const DOGMA_CONFIG_ID = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
 // Shawn Mendes character IDs (both variants)
 const SHAWN_MENDES_CONFIG_IDS = [
-  'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
-  'CHAR_b4bca3ed-18dc-4561-a511-636a5120e07e',
+  'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
 ];
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined

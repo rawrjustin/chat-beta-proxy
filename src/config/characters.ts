@@ -182,7 +182,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     hidden: true,
   },
   {
-    config_id: 'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
+    config_id: 'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
     name: 'Shawn Mendes',
     description: 'Shawn Mendes',
     display_order: 19,
@@ -232,7 +232,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     avatar_url: getS3ImageUrl('blunt.png'),
   },
   {
-    config_id: 'CHAR_b4bca3ed-18dc-4561-a511-636a5120e07e',
+    config_id: 'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
     name: 'Shawn Mendes',
     description: 'Co-creating in his home studio',
     display_order: 26,
