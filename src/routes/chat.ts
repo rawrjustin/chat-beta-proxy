@@ -264,42 +264,47 @@ router.get('/characters', async (req: Request, res: Response) => {
     // Return all defined characters, even if config fetch failed
     // IMPORTANT: Always use the config_id from our definitions, never from the upstream config
     // This ensures character IDs remain stable across deployments and refreshes
-    const characters = characterDefinitions.map((definition) => {
-      const config_id = definition.config_id; // Always use the ID from our definition
-      const config = configMap.get(config_id) || null;
-      
-      // Ensure config_id is always from our definition, never from upstream config
-      // This prevents character IDs from changing between deployments/refreshes
-      // Prioritize definition's avatar_url, but fall back to API config's avatar_url if definition doesn't have one
-      const avatar_url = definition.avatar_url || config?.avatar_url || null;
-      
-      // Log avatar_url processing for debugging
-      if (avatar_url) {
-        console.log(`[characters] Character ${definition.name || config_id}: avatar_url=${avatar_url} (from ${definition.avatar_url ? 'definition' : 'API config'})`);
-      } else if (config?.avatar_url) {
-        console.log(`[characters] Character ${definition.name || config_id}: API config has avatar_url=${config.avatar_url} but it's not being used`);
-      }
-      
-      // Get password metadata
-      const passwordService = getPasswordService();
-      const passwordMetadata = await passwordService.getPasswordMetadata(config_id);
-      
-      const character = {
-        config_id, // Always use the hardcoded config_id from our definitions
-        name: definition.name || config?.name || null,
-        description: definition.description || config?.description || null,
-        display_order: definition.display_order,
-        avatar_url, // Use definition's avatar_url first, fall back to API config's
-        config: config ? {
-          ...config,
-          // Override any config_id in the nested config to match our definition
-          config_id: config_id
-        } : null, // Full character config from API (may be null if fetch failed)
-        ...passwordMetadata, // Include password_required, password_hint, password_updated_at
-      };
-      
-      return character;
-    }).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    const passwordService = getPasswordService();
+    const characters = await Promise.all(
+      characterDefinitions.map(async (definition) => {
+        const config_id = definition.config_id; // Always use the ID from our definition
+        const config = configMap.get(config_id) || null;
+        
+        // Ensure config_id is always from our definition, never from upstream config
+        // This prevents character IDs from changing between deployments/refreshes
+        // Prioritize definition's avatar_url, but fall back to API config's avatar_url if definition doesn't have one
+        const avatar_url = definition.avatar_url || config?.avatar_url || null;
+        
+        // Log avatar_url processing for debugging
+        if (avatar_url) {
+          console.log(`[characters] Character ${definition.name || config_id}: avatar_url=${avatar_url} (from ${definition.avatar_url ? 'definition' : 'API config'})`);
+        } else if (config?.avatar_url) {
+          console.log(`[characters] Character ${definition.name || config_id}: API config has avatar_url=${config.avatar_url} but it's not being used`);
+        }
+        
+        // Get password metadata
+        const passwordMetadata = await passwordService.getPasswordMetadata(config_id);
+        
+        const character = {
+          config_id, // Always use the hardcoded config_id from our definitions
+          name: definition.name || config?.name || null,
+          description: definition.description || config?.description || null,
+          display_order: definition.display_order,
+          avatar_url, // Use definition's avatar_url first, fall back to API config's
+          config: config ? {
+            ...config,
+            // Override any config_id in the nested config to match our definition
+            config_id: config_id
+          } : null, // Full character config from API (may be null if fetch failed)
+          ...passwordMetadata, // Include password_required, password_hint, password_updated_at
+        };
+        
+        return character;
+      })
+    );
+    
+    // Sort after awaiting all promises
+    characters.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
     res.json({
       characters,
