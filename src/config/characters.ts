@@ -182,13 +182,6 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     hidden: true,
   },
   {
-    config_id: 'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
-    name: 'Shawn Mendes',
-    description: 'Shawn Mendes',
-    display_order: 19,
-    hidden: true,
-  },
-  {
     config_id: 'CHAR_115ca055-9c2b-4b9a-8be8-2b9b94246bee',
     name: 'Jake Paul',
     description: 'Jake Paul',
@@ -235,7 +228,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     config_id: 'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
     name: 'Shawn Mendes',
     description: 'Co-creating in his home studio',
-    display_order: 26,
+    display_order: 19,
     hidden: true,
   },
   {

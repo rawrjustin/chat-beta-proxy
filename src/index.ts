@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import chatRoutes from './routes/chat';
 import adminRoutes from './routes/admin';
+import betaRoutes from './routes/beta';
 import { requestLogger, errorHandler } from './middleware/logger';
 import { initChatService } from './services/chatService';
 import { TokenRefreshService } from './services/tokenRefreshService';
@@ -101,6 +102,9 @@ app.use('/api', chatRoutes);
 // Admin routes
 app.use('/admin', adminRoutes);
 
+// Beta signup page
+app.use('/beta', betaRoutes);
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
@@ -123,6 +127,7 @@ initializeToken().then(() => {
    - POST /api/chat
    - POST /api/followups
    - GET  /admin (password protected)
+   - GET  /beta (beta signup page)
     `);
   });
 }).catch((error) => {
