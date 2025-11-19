@@ -152,6 +152,11 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
       
       if (isNotFound) {
         console.warn(`[GET /api/config/${configId}] Character config not found on upstream API, but character exists in local config`);
+        
+        // Get password metadata (even when upstream config fails)
+        const passwordService = getPasswordService();
+        const passwordMetadata = passwordService.getPasswordMetadata(configId);
+        
         // Still return local metadata even if upstream config fails
         return res.json({
           config_id: characterDefinition.config_id,
@@ -161,7 +166,8 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
           avatar_url: characterDefinition.avatar_url || null,
           hidden: characterDefinition.hidden || false,
           // Upstream config is null, but we still have local metadata
-          ...(upstreamConfig || {})
+          ...(upstreamConfig || {}),
+          ...passwordMetadata, // Include password_required, password_hint, password_updated_at
         });
       }
       
