@@ -18,6 +18,11 @@ const PREPROMPT_ENDPOINT =
   process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
 const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
 const DOGMA_CONFIG_ID = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
+// Shawn Mendes character IDs (both variants)
+const SHAWN_MENDES_CONFIG_IDS = [
+  'CHAR_7914ca60-6213-4f10-9d3f-9b585d156932',
+  'CHAR_b4bca3ed-18dc-4561-a511-636a5120e07e',
+];
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
@@ -421,10 +426,13 @@ export class ChatService {
     try {
       const token = await this.getValidToken();
 
-      // Use vulgar prompt for Dogma character, regular prompt for all others
-      const promptName = configId === DOGMA_CONFIG_ID 
-        ? 'contextual_followups_v1_vulgar' 
-        : PREPROMPT_NAME;
+      // Use specific prompts for certain characters, default for all others
+      let promptName = PREPROMPT_NAME;
+      if (configId === DOGMA_CONFIG_ID) {
+        promptName = 'contextual_followups_v1_vulgar';
+      } else if (configId && SHAWN_MENDES_CONFIG_IDS.includes(configId)) {
+        promptName = 'contextual_followups_v1_liveobjective';
+      }
 
       // Use LLM Gateway API format with predefined prompt_name
       // The prompt template 'contextual_followups_v1' should handle the instruction formatting
