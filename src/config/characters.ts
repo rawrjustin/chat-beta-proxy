@@ -229,6 +229,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Shawn Mendes',
     description: 'Co-creating in his home studio',
     display_order: 19,
+    avatar_url: getS3ImageUrl('shawn.png'),
     hidden: true,
   },
   {

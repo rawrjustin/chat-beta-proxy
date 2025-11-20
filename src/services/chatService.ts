@@ -671,23 +671,14 @@ export class ChatService {
         });
       }
       
-      console.error(`[${prepromptRequestId}] [generatePreprompts] Falling back to local suggestions:`, {
+      console.error(`[${prepromptRequestId}] [generatePreprompts] Failed to generate preprompts:`, {
         error: error instanceof Error ? error.message : String(error),
         errorName: error?.name,
         stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
         totalTime: `${totalTime}ms`,
       });
-      // Extract last pair for fallback if available
-      const lastUserMessage = conversationHistory && conversationHistory.length > 0
-        ? conversationHistory.filter(msg => msg.role === 'user').pop()?.content || ''
-        : '';
-      const lastAssistantMessage = conversationHistory && conversationHistory.length > 0
-        ? conversationHistory.filter(msg => msg.role === 'assistant').pop()?.content || ''
-        : '';
-      return this.buildFallbackPreprompts(
-        lastUserMessage,
-        lastAssistantMessage
-      );
+      // Return empty array instead of fallback preprompts
+      return [];
     }
   }
 
@@ -716,34 +707,6 @@ export class ChatService {
     } else {
       throw new Error('Either conversation_history or user_turn + assistant_turn must be provided');
     }
-  }
-
-  private buildFallbackPreprompts(userTurn: string, assistantTurn: string): Preprompt[] {
-    const lastUser = userTurn?.trim() || 'the last thing you said';
-    const lastAssistant = assistantTurn?.trim() || 'that last reply';
-
-    return [
-      {
-        type: 'roleplay',
-        prompt: `You ride the rush from ${lastAssistant.toLowerCase()} and dare them to notch the energy even higher.`,
-        simplified_text: 'go bigger',
-      },
-      {
-        type: 'roleplay',
-        prompt: `You pivot fast, acting on instinct, and tease a wild next move based on how you felt when you said "${lastUser}".`,
-        simplified_text: 'switch lanes',
-      },
-      {
-        type: 'conversation',
-        prompt: `Hold up—that response has you curious. Ask directly what surprised them most about ${lastAssistant.toLowerCase()}.`,
-        simplified_text: 'wait really?',
-      },
-      {
-        type: 'conversation',
-        prompt: `Stay up late brain: press them for the why behind it all, keeping the mood casual but insistent.`,
-        simplified_text: 'tell me why',
-      },
-    ];
   }
 }
 
