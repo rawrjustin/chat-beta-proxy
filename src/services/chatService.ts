@@ -505,11 +505,11 @@ export class ChatService {
       // Use LLM Gateway API format with predefined prompt_name
       // The prompt template 'contextual_followups_v1' should handle the instruction formatting
       // Now using conversation_history instead of user_turn and assistant_turn
-      // Use prompt_tag: "prod" to ensure we use the production-tagged version instead of latest
+      // Use label: "dev" to ensure we use the dev-tagged version instead of latest
       const payload: any = {
         model: PREPROMPT_MODEL,
         prompt_name: promptName,
-        prompt_tag: 'prod',
+        label: 'dev',
         inputs: {
           conversation_history: conversationHistory,
         },
@@ -524,7 +524,7 @@ export class ChatService {
           endpoint: PREPROMPT_ENDPOINT,
           model: PREPROMPT_MODEL,
           prompt_name: promptName,
-          prompt_tag: 'prod',
+          label: 'dev',
           configId: configId || 'none',
           conversationHistoryPairs: conversationHistory.length,
           timeout: PREPROMPT_TIMEOUT,
