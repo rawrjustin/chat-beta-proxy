@@ -8,6 +8,55 @@ import { getPasswordService } from '../services/passwordService';
 const router = Router();
 
 /**
+ * In-memory cache for preprompts
+ * Key: request_id, Value: { preprompts, timestamp }
+ * Preprompts expire after 5 minutes
+ */
+interface PrepromptCacheEntry {
+  preprompts: Preprompt[];
+  timestamp: number;
+}
+
+const prepromptCache = new Map<string, PrepromptCacheEntry>();
+const PREPROMPT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Store preprompts in cache
+ */
+function storePreprompts(requestId: string, preprompts: Preprompt[]): void {
+  prepromptCache.set(requestId, {
+    preprompts,
+    timestamp: Date.now()
+  });
+
+  // Clean up old entries (simple cleanup on write)
+  const now = Date.now();
+  for (const [key, value] of prepromptCache.entries()) {
+    if (now - value.timestamp > PREPROMPT_CACHE_TTL) {
+      prepromptCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Retrieve preprompts from cache
+ */
+function getPreprompts(requestId: string): Preprompt[] | null {
+  const entry = prepromptCache.get(requestId);
+  if (!entry) {
+    return null;
+  }
+
+  // Check if expired
+  if (Date.now() - entry.timestamp > PREPROMPT_CACHE_TTL) {
+    prepromptCache.delete(requestId);
+    return null;
+  }
+
+  return entry.preprompts;
+}
+
+/**
  * Helper function to validate password access for a character
  * Returns null if access is granted, or an error response object if access is denied
  */
@@ -411,16 +460,36 @@ router.post('/sessions', async (req: Request, res: Response) => {
       const cleanedAi = stripCurlyBracketTags(chatResponse.ai);
       const cleanedTextResponse = stripCurlyBracketTags(chatResponse.text_response_cleaned);
 
-      // OPTIMIZATION: Skip preprompts on initial greeting to improve load time
-      // This saves 1-3 seconds on first page load
-      // Frontend can handle undefined preprompts gracefully
       greetingResponse = {
         ai: cleanedAi,
         text_response_cleaned: cleanedTextResponse,
         request_id: chatResponse.request_id,
         warning_message: chatResponse.warning_message,
-        preprompts: undefined, // Skipped for performance - frontend should handle this
+        preprompts: null, // Will be available via GET /api/preprompts/:request_id
       };
+
+      // Generate preprompts asynchronously in the background
+      if (chatResponse.ai || chatResponse.text_response_cleaned) {
+        // Don't await - let this run in background
+        (async () => {
+          try {
+            const preprompts = await chatService.generatePreprompts(
+              [
+                { role: 'user', content: greetingMessage },
+                { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
+              ],
+              config_id
+            );
+
+            // Store preprompts in cache for retrieval
+            if (preprompts && chatResponse.request_id) {
+              storePreprompts(chatResponse.request_id, preprompts);
+            }
+          } catch (error) {
+            console.error('Warning: Failed to generate preprompts for greeting response:', error);
+          }
+        })();
+      }
     } catch (error) {
       console.error('Warning: Failed to send greeting message:', error);
       // Continue even if greeting fails - return session without greeting
@@ -520,47 +589,49 @@ router.post('/chat', async (req: Request, res: Response) => {
     const cleanedAi = stripCurlyBracketTags(response.ai);
     const cleanedTextResponse = stripCurlyBracketTags(response.text_response_cleaned);
 
-    // Return AI response immediately - preprompts can be fetched separately if needed
+    // Return AI response immediately with null preprompts
+    // Frontend can fetch preprompts separately via GET /api/preprompts/:request_id
     res.json({
       ai: cleanedAi,
       session_id: response.session.id,
       request_id: response.request_id,
       text_response_cleaned: cleanedTextResponse,
       warning_message: response.warning_message,
-      preprompts: undefined, // Frontend should handle undefined preprompts gracefully
+      preprompts: null, // Will be available via GET /api/preprompts/:request_id
     });
 
-    // NOTE: Preprompt generation has been disabled to improve response time by 1-3 seconds
-    // If you need to re-enable preprompts in the future:
-    // 1. Remove the preprompts: undefined line above
-    // 2. Uncomment the code below and move it before res.json()
-    // 3. Add preprompts to the response object
-    /*
-    let preprompts: Preprompt[] | undefined;
-    try {
-      if (input && (response.ai || response.text_response_cleaned)) {
-        let historyForPreprompts: ConversationMessage[];
+    // Generate preprompts asynchronously in the background
+    // Store them in memory so they can be fetched by the frontend
+    if (input && (response.ai || response.text_response_cleaned)) {
+      // Don't await - let this run in background
+      (async () => {
+        try {
+          let historyForPreprompts: ConversationMessage[];
 
-        if (conversation_history && conversation_history.length > 0) {
-          historyForPreprompts = [
-            ...conversation_history,
-            { role: 'user' as const, content: input },
-            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
-          ].slice(-8) as ConversationMessage[];
-        } else {
-          historyForPreprompts = [
-            { role: 'user' as const, content: input },
-            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
-          ];
+          if (conversation_history && conversation_history.length > 0) {
+            historyForPreprompts = [
+              ...conversation_history,
+              { role: 'user' as const, content: input },
+              { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
+            ].slice(-8) as ConversationMessage[];
+          } else {
+            historyForPreprompts = [
+              { role: 'user' as const, content: input },
+              { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
+            ];
+          }
+
+          const preprompts = await chatService.generatePreprompts(historyForPreprompts, config_id);
+
+          // Store preprompts in cache for retrieval
+          if (preprompts && response.request_id) {
+            storePreprompts(response.request_id, preprompts);
+          }
+        } catch (error) {
+          console.error('Warning: Failed to generate preprompts for chat response:', error);
         }
-
-        preprompts = await chatService.generatePreprompts(historyForPreprompts, config_id);
-      }
-    } catch (error) {
-      console.error('Warning: Failed to generate preprompts for chat response:', error);
+      })();
     }
-    // Then add preprompts to res.json() instead of undefined
-    */
   } catch (error: any) {
     console.error('Error sending chat:', error);
     res.status(500).json({
@@ -864,6 +935,44 @@ router.post('/followups', async (req: Request, res: Response) => {
     console.error('Error generating follow-ups:', error);
     res.status(500).json({
       error: 'Failed to generate follow-ups',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/preprompts/:request_id - Retrieve preprompts for a chat message
+// This allows the frontend to fetch preprompts asynchronously after receiving the chat response
+router.get('/preprompts/:request_id', async (req: Request, res: Response) => {
+  try {
+    const { request_id } = req.params;
+
+    if (!request_id) {
+      return res.status(400).json({ error: 'request_id is required' });
+    }
+
+    // Try to get preprompts from cache
+    const preprompts = getPreprompts(request_id);
+
+    if (preprompts === null) {
+      // Either not generated yet, or expired
+      // Return 202 Accepted to indicate processing, or 404 if expired
+      return res.status(202).json({
+        message: 'Preprompts are being generated or have expired',
+        request_id,
+        preprompts: null,
+        retry_after: 1000, // Suggest retry after 1 second
+      });
+    }
+
+    // Return the preprompts
+    res.json({
+      request_id,
+      preprompts,
+    });
+  } catch (error: any) {
+    console.error('Error retrieving preprompts:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve preprompts',
       message: error.message
     });
   }
