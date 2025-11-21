@@ -571,6 +571,17 @@ export class ChatService {
 
       const data = await response.json();
       
+      // Log raw response structure for debugging (always log this when there's an issue)
+      console.log(`[${prepromptRequestId}] [generatePreprompts] Raw API response structure:`, {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        hasChoices: !!data?.choices,
+        choicesLength: data?.choices?.length || 0,
+        hasDataResponse: !!data?.data?.response,
+        hasResponse: !!data?.response,
+        hasDataContent: !!data?.data?.content,
+      });
+      
       // LLM Gateway API returns { data: { response: "..." } }
       // Try multiple response formats
       const content =
@@ -580,13 +591,12 @@ export class ChatService {
         data?.data?.content ??
         null;
 
-      // Only log in debug mode
-      if (process.env.DEBUG_LOGGING === 'true') {
-        console.log('[generatePreprompts] Extracted content:', {
-          hasContent: !!content,
-          contentLength: typeof content === 'string' ? content.length : 0,
-        });
-      }
+      // Log content extraction (always log when debugging preprompts)
+      console.log(`[${prepromptRequestId}] [generatePreprompts] Extracted content:`, {
+        hasContent: !!content,
+        contentLength: typeof content === 'string' ? content.length : 0,
+        contentPreview: typeof content === 'string' ? content.substring(0, 200) : 'not a string',
+      });
 
       if (!content || typeof content !== 'string') {
         // Only stringify in debug mode to save memory
@@ -617,29 +627,49 @@ export class ChatService {
       try {
         // Parse the cleaned JSON content
         parsed = typeof cleanedContent === 'string' ? JSON.parse(cleanedContent) : cleanedContent;
-        if (process.env.DEBUG_LOGGING === 'true') {
-          console.log('[generatePreprompts] Parsed JSON:', {
-            prepromptsCount: parsed?.preprompts?.length || 0,
-          });
-        }
+        // Always log parsed structure when debugging preprompts
+        console.log(`[${prepromptRequestId}] [generatePreprompts] Parsed JSON:`, {
+          hasParsed: !!parsed,
+          parsedKeys: parsed ? Object.keys(parsed) : [],
+          prepromptsCount: parsed?.preprompts?.length || 0,
+          prepromptsIsArray: Array.isArray(parsed?.preprompts),
+          prepromptsPreview: parsed?.preprompts ? JSON.stringify(parsed.preprompts.slice(0, 2)).substring(0, 300) : 'none',
+        });
       } catch (error) {
-        console.error('[generatePreprompts] JSON parse error:', {
+        console.error(`[${prepromptRequestId}] [generatePreprompts] JSON parse error:`, {
           error: (error as Error).message,
           contentPreview: content.substring(0, 500),
+          cleanedContentPreview: cleanedContent.substring(0, 500),
         });
         throw new Error(`Failed to parse preprompt JSON: ${(error as Error).message}`);
       }
 
       if (!parsed?.preprompts || !Array.isArray(parsed.preprompts)) {
-        // Only stringify in debug mode to save memory
-        const errorData = process.env.DEBUG_LOGGING === 'true'
-          ? JSON.stringify(parsed).substring(0, 500)
-          : 'invalid structure';
-        console.error('[generatePreprompts] Invalid preprompts structure:', {
+        // Always log full structure when there's an error
+        const errorData = JSON.stringify(parsed).substring(0, 1000);
+        console.error(`[${prepromptRequestId}] [generatePreprompts] Invalid preprompts structure:`, {
           parsed: errorData,
+          parsedType: typeof parsed,
+          hasPreprompts: !!parsed?.preprompts,
+          prepromptsType: typeof parsed?.preprompts,
+          isArray: Array.isArray(parsed?.preprompts),
         });
         throw new Error('Preprompt payload missing required preprompts array');
       }
+
+      // Log before filtering to see what we're working with
+      console.log(`[${prepromptRequestId}] [generatePreprompts] Before filtering:`, {
+        rawCount: parsed.preprompts.length,
+        rawItems: parsed.preprompts.map((item, idx) => ({
+          index: idx,
+          hasItem: !!item,
+          type: item?.type,
+          hasPrompt: typeof item?.prompt === 'string',
+          hasSimplifiedText: typeof item?.simplified_text === 'string',
+          promptLength: typeof item?.prompt === 'string' ? item.prompt.length : 0,
+          simplifiedTextLength: typeof item?.simplified_text === 'string' ? item.simplified_text.length : 0,
+        })),
+      });
 
       const sanitized = parsed.preprompts
         .filter(
@@ -651,10 +681,44 @@ export class ChatService {
         )
         .slice(0, 4);
 
+      // Log what was filtered out
+      const filteredOut = parsed.preprompts.filter(
+        (item) =>
+          !(
+            item != null &&
+            (item.type === 'roleplay' || item.type === 'conversation') &&
+            typeof item.prompt === 'string' &&
+            typeof item.simplified_text === 'string'
+          )
+      );
+
+      if (filteredOut.length > 0) {
+        console.warn(`[${prepromptRequestId}] [generatePreprompts] Filtered out ${filteredOut.length} invalid preprompts:`, {
+          filteredItems: filteredOut.map((item, idx) => ({
+            index: idx,
+            item: JSON.stringify(item).substring(0, 200),
+            reasons: {
+              isNull: item == null,
+              wrongType: item?.type !== 'roleplay' && item?.type !== 'conversation',
+              promptNotString: typeof item?.prompt !== 'string',
+              simplifiedTextNotString: typeof item?.simplified_text !== 'string',
+            },
+          })),
+        });
+      }
+
       if (sanitized.length !== 4) {
-        console.error('[generatePreprompts] Wrong number of preprompts:', {
+        console.error(`[${prepromptRequestId}] [generatePreprompts] Wrong number of preprompts:`, {
           expected: 4,
           got: sanitized.length,
+          rawCount: parsed.preprompts.length,
+          filteredOut: filteredOut.length,
+          sanitizedItems: sanitized.map((item, idx) => ({
+            index: idx,
+            type: item.type,
+            prompt: item.prompt.substring(0, 50),
+            simplified_text: item.simplified_text,
+          })),
         });
         throw new Error('Expected exactly 4 preprompts from generator');
       }
@@ -707,6 +771,34 @@ export class ChatService {
     } else {
       throw new Error('Either conversation_history or user_turn + assistant_turn must be provided');
     }
+  }
+
+  private buildFallbackPreprompts(userTurn: string, assistantTurn: string): Preprompt[] {
+    const lastUser = userTurn?.trim() || 'the last thing you said';
+    const lastAssistant = assistantTurn?.trim() || 'that last reply';
+
+    return [
+      {
+        type: 'roleplay',
+        prompt: `You ride the rush from ${lastAssistant.toLowerCase()} and dare them to notch the energy even higher.`,
+        simplified_text: 'go bigger',
+      },
+      {
+        type: 'roleplay',
+        prompt: `You pivot fast, acting on instinct, and tease a wild next move based on how you felt when you said "${lastUser}".`,
+        simplified_text: 'switch lanes',
+      },
+      {
+        type: 'conversation',
+        prompt: `Hold up—that response has you curious. Ask directly what surprised them most about ${lastAssistant.toLowerCase()}.`,
+        simplified_text: 'wait really?',
+      },
+      {
+        type: 'conversation',
+        prompt: `Stay up late brain: press them for the why behind it all, keeping the mood casual but insistent.`,
+        simplified_text: 'tell me why',
+      },
+    ];
   }
 }
 
