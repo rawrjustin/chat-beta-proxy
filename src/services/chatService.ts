@@ -18,10 +18,6 @@ const PREPROMPT_ENDPOINT =
   process.env.PREPROMPT_ENDPOINT || `${BASE_URL}/v1/llm/infer`;
 const PREPROMPT_NAME = process.env.PREPROMPT_NAME || 'contextual_followups_v1';
 const DOGMA_CONFIG_ID = 'CHAR_dbafb670-8b2b-4d58-ac81-2b2f4058f44e';
-// Shawn Mendes character IDs (both variants)
-const SHAWN_MENDES_CONFIG_IDS = [
-  'CHAR_195be96c-e510-41b9-ae13-ad08514a6086',
-];
 const PREPROMPT_TEMPERATURE =
   process.env.PREPROMPT_TEMPERATURE !== undefined
     ? Number(process.env.PREPROMPT_TEMPERATURE)
@@ -498,8 +494,6 @@ export class ChatService {
       let promptName = PREPROMPT_NAME;
       if (configId === DOGMA_CONFIG_ID) {
         promptName = 'contextual_followups_v1_vulgar';
-      } else if (configId && SHAWN_MENDES_CONFIG_IDS.includes(configId)) {
-        promptName = 'contextual_followups_v1_liveobjective';
       }
 
       // Use LLM Gateway API format with predefined prompt_name

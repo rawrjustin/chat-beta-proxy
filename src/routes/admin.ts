@@ -151,8 +151,8 @@ const checkPassword = (req: Request, res: Response, next: Function) => {
 };
 
 // Admin page - serve HTML
-router.get('/', checkPassword, (req: Request, res: Response) => {
-  const allCharacters = getAllCharacters();
+router.get('/', checkPassword, async (req: Request, res: Response) => {
+  const allCharacters = await getAllCharacters();
   
   // Generate shareable links (assuming the frontend URL structure)
   // You may need to adjust this based on your actual frontend URL structure
@@ -483,7 +483,7 @@ router.put('/api/characters/:config_id/password', checkPassword, async (req: Req
     }
 
     // Check if character exists
-    if (!characterExists(config_id)) {
+    if (!(await characterExists(config_id))) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
@@ -518,7 +518,7 @@ router.delete('/api/characters/:config_id/password', checkPassword, async (req: 
     }
 
     // Check if character exists
-    if (!characterExists(config_id)) {
+    if (!(await characterExists(config_id))) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
@@ -539,10 +539,212 @@ router.delete('/api/characters/:config_id/password', checkPassword, async (req: 
   }
 });
 
+// POST /admin/api/characters - Add a new character
+router.post('/api/characters', checkPassword, async (req: Request, res: Response) => {
+  try {
+    console.log('[POST /admin/api/characters] Request received');
+    const { config_id, name, description, display_order, avatar_url, hidden } = req.body;
+
+    // Validation
+    if (!config_id || typeof config_id !== 'string' || config_id.trim().length === 0) {
+      return res.status(400).json({ error: 'config_id is required and must be a non-empty string' });
+    }
+
+    // Check if character already exists
+    if (await characterExists(config_id)) {
+      return res.status(409).json({ error: 'Character with this config_id already exists' });
+    }
+
+    // Validate optional fields
+    if (name !== undefined && typeof name !== 'string') {
+      return res.status(400).json({ error: 'name must be a string' });
+    }
+    if (description !== undefined && typeof description !== 'string') {
+      return res.status(400).json({ error: 'description must be a string' });
+    }
+    if (display_order !== undefined && (typeof display_order !== 'number' || !Number.isInteger(display_order))) {
+      return res.status(400).json({ error: 'display_order must be an integer' });
+    }
+    if (avatar_url !== undefined && typeof avatar_url !== 'string') {
+      return res.status(400).json({ error: 'avatar_url must be a string' });
+    }
+    if (hidden !== undefined && typeof hidden !== 'boolean') {
+      return res.status(400).json({ error: 'hidden must be a boolean' });
+    }
+
+    // Check if database is available
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ 
+        error: 'Database not available',
+        message: 'DATABASE_URL environment variable is required to add characters dynamically'
+      });
+    }
+
+    // Insert character into database
+    const { upsertCharacter } = await import('../services/database');
+    const character = await upsertCharacter({
+      config_id: config_id.trim(),
+      name: name?.trim() || undefined,
+      description: description?.trim() || undefined,
+      display_order: display_order || undefined,
+      avatar_url: avatar_url?.trim() || undefined,
+      hidden: hidden || false,
+    });
+
+    console.log(`[POST /admin/api/characters] Character created: ${character.config_id}`);
+
+    res.status(201).json({
+      message: 'Character created successfully',
+      character: {
+        config_id: character.config_id,
+        name: character.name || null,
+        description: character.description || null,
+        display_order: character.display_order || null,
+        avatar_url: character.avatar_url || null,
+        hidden: character.hidden || false,
+        created_at: character.created_at,
+        updated_at: character.updated_at,
+      },
+    });
+  } catch (error: any) {
+    console.error('[POST /admin/api/characters] Error creating character:', error);
+    res.status(500).json({
+      error: 'Failed to create character',
+      message: error.message
+    });
+  }
+});
+
+// PUT /admin/api/characters/:config_id - Update an existing character
+router.put('/api/characters/:config_id', checkPassword, async (req: Request, res: Response) => {
+  try {
+    console.log(`[PUT /admin/api/characters/:config_id] Request received for config_id: ${req.params.config_id}`);
+    const { config_id } = req.params;
+    const { name, description, display_order, avatar_url, hidden } = req.body;
+
+    if (!config_id) {
+      return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    // Check if character exists
+    if (!(await characterExists(config_id))) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Validate optional fields
+    if (name !== undefined && typeof name !== 'string') {
+      return res.status(400).json({ error: 'name must be a string' });
+    }
+    if (description !== undefined && typeof description !== 'string') {
+      return res.status(400).json({ error: 'description must be a string' });
+    }
+    if (display_order !== undefined && (typeof display_order !== 'number' || !Number.isInteger(display_order))) {
+      return res.status(400).json({ error: 'display_order must be an integer' });
+    }
+    if (avatar_url !== undefined && typeof avatar_url !== 'string') {
+      return res.status(400).json({ error: 'avatar_url must be a string' });
+    }
+    if (hidden !== undefined && typeof hidden !== 'boolean') {
+      return res.status(400).json({ error: 'hidden must be a boolean' });
+    }
+
+    // Check if database is available
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ 
+        error: 'Database not available',
+        message: 'DATABASE_URL environment variable is required to update characters dynamically'
+      });
+    }
+
+    // Get existing character to preserve fields not being updated
+    const { getCharacterFromDatabase } = await import('../services/database');
+    const existing = await getCharacterFromDatabase(config_id);
+    
+    // Update character in database (upsert will update if exists)
+    const { upsertCharacter } = await import('../services/database');
+    const character = await upsertCharacter({
+      config_id: config_id.trim(),
+      name: name !== undefined ? name.trim() : existing?.name,
+      description: description !== undefined ? description.trim() : existing?.description,
+      display_order: display_order !== undefined ? display_order : existing?.display_order,
+      avatar_url: avatar_url !== undefined ? avatar_url.trim() : existing?.avatar_url,
+      hidden: hidden !== undefined ? hidden : existing?.hidden,
+    });
+
+    console.log(`[PUT /admin/api/characters/:config_id] Character updated: ${character.config_id}`);
+
+    res.json({
+      message: 'Character updated successfully',
+      character: {
+        config_id: character.config_id,
+        name: character.name || null,
+        description: character.description || null,
+        display_order: character.display_order || null,
+        avatar_url: character.avatar_url || null,
+        hidden: character.hidden || false,
+        created_at: character.created_at,
+        updated_at: character.updated_at,
+      },
+    });
+  } catch (error: any) {
+    console.error('[PUT /admin/api/characters/:config_id] Error updating character:', error);
+    res.status(500).json({
+      error: 'Failed to update character',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /admin/api/characters/:config_id - Delete a character
+router.delete('/api/characters/:config_id', checkPassword, async (req: Request, res: Response) => {
+  try {
+    console.log(`[DELETE /admin/api/characters/:config_id] Request received for config_id: ${req.params.config_id}`);
+    const { config_id } = req.params;
+
+    if (!config_id) {
+      return res.status(400).json({ error: 'config_id is required' });
+    }
+
+    // Check if character exists in database (we can only delete database characters, not hardcoded ones)
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ 
+        error: 'Database not available',
+        message: 'DATABASE_URL environment variable is required to delete characters'
+      });
+    }
+
+    const { getCharacterFromDatabase, deleteCharacterFromDatabase } = await import('../services/database');
+    const existing = await getCharacterFromDatabase(config_id);
+    
+    if (!existing) {
+      return res.status(404).json({ error: 'Character not found in database. Only database characters can be deleted.' });
+    }
+
+    const deleted = await deleteCharacterFromDatabase(config_id);
+
+    if (!deleted) {
+      return res.status(500).json({ error: 'Failed to delete character' });
+    }
+
+    console.log(`[DELETE /admin/api/characters/:config_id] Character deleted: ${config_id}`);
+
+    res.json({
+      message: 'Character deleted successfully',
+      config_id,
+    });
+  } catch (error: any) {
+    console.error('[DELETE /admin/api/characters/:config_id] Error deleting character:', error);
+    res.status(500).json({
+      error: 'Failed to delete character',
+      message: error.message
+    });
+  }
+});
+
 // Admin API endpoint to get all characters (including hidden)
 // NOTE: This route is defined AFTER the password routes to avoid route conflicts
 router.get('/api/characters', checkPassword, async (req: Request, res: Response) => {
-  const allCharacters = getAllCharacters();
+  const allCharacters = await getAllCharacters();
   const passwordService = getPasswordService();
   
   // Add password metadata to each character

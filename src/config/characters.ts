@@ -294,6 +294,12 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     description: 'Her Royal Kittiness',
     display_order: 35,
   },
+  {
+    config_id: 'CHAR_a50ae96e-df4d-4538-9505-cc5b46ff9b67',
+    name: 'Paris Hilton',
+    description: 'Hiding from Paparazzi',
+    display_order: 36,
+  },
 ];
 
 /**
@@ -320,9 +326,29 @@ export function getAvailableCharacterIds(): string[] {
  * Returns a stable, immutable array of character definitions
  * Character IDs are guaranteed to remain consistent across deployments and refreshes
  * Filters out hidden characters for public API
+ * Merges database characters with hardcoded ones (database takes precedence)
  */
-export function getAvailableCharacters(includeHidden: boolean = false): CharacterDefinition[] {
+export async function getAvailableCharacters(includeHidden: boolean = false): Promise<CharacterDefinition[]> {
   const envCharacters = process.env.AVAILABLE_CHARACTERS;
+  
+  // Load characters from database (if available)
+  let dbCharacters: CharacterDefinition[] = [];
+  try {
+    if (process.env.DATABASE_URL) {
+      const { getCharactersFromDatabase } = await import('../services/database');
+      const dbChars = await getCharactersFromDatabase();
+      dbCharacters = dbChars.map(char => ({
+        config_id: char.config_id,
+        name: char.name || undefined,
+        description: char.description || undefined,
+        display_order: char.display_order || undefined,
+        avatar_url: char.avatar_url || undefined,
+        hidden: char.hidden || false,
+      }));
+    }
+  } catch (error) {
+    console.warn('[getAvailableCharacters] Could not load characters from database:', error);
+  }
   
   if (envCharacters) {
     // If using env var, create minimal definitions
@@ -331,20 +357,23 @@ export function getAvailableCharacters(includeHidden: boolean = false): Characte
       display_order: index + 1,
     }));
     
+    // Merge with database characters (database takes precedence)
+    const merged = mergeCharacters(characters, dbCharacters);
+    
     // Filter hidden characters if not including them
     if (!includeHidden) {
-      return characters.filter(char => {
+      return merged.filter(char => {
         const fullChar = AVAILABLE_CHARACTERS.find(c => c.config_id === char.config_id);
-        return !fullChar?.hidden;
+        return !(fullChar?.hidden || char.hidden);
       });
     }
     
-    return characters;
+    return merged;
   }
   
-  // Return hardcoded definitions with metadata
-  // Return a copy to ensure immutability and prevent accidental modifications
-  const allCharacters = [...AVAILABLE_CHARACTERS];
+  // Merge hardcoded characters with database characters
+  // Database characters take precedence for duplicates
+  const allCharacters = mergeCharacters([...AVAILABLE_CHARACTERS], dbCharacters);
   
   // Filter hidden characters if not including them
   if (!includeHidden) {
@@ -360,25 +389,86 @@ export function getAvailableCharacters(includeHidden: boolean = false): Characte
 }
 
 /**
+ * Merge two character arrays, with dbCharacters taking precedence for duplicates
+ */
+function mergeCharacters(
+  hardcoded: CharacterDefinition[],
+  dbCharacters: CharacterDefinition[]
+): CharacterDefinition[] {
+  const merged = new Map<string, CharacterDefinition>();
+  
+  // First, add all hardcoded characters
+  hardcoded.forEach(char => {
+    merged.set(char.config_id, { ...char });
+  });
+  
+  // Then, add/override with database characters (database takes precedence)
+  dbCharacters.forEach(char => {
+    merged.set(char.config_id, { ...char });
+  });
+  
+  return Array.from(merged.values());
+}
+
+/**
  * Get all character definitions including hidden ones (for admin use)
  */
-export function getAllCharacters(): CharacterDefinition[] {
+export async function getAllCharacters(): Promise<CharacterDefinition[]> {
   return getAvailableCharacters(true);
 }
 
 /**
  * Check if a character ID exists (including hidden characters)
  * Useful for validating character IDs from URL parameters
+ * Checks both hardcoded and database characters
  */
-export function characterExists(configId: string): boolean {
-  return AVAILABLE_CHARACTERS.some(char => char.config_id === configId);
+export async function characterExists(configId: string): Promise<boolean> {
+  // Check hardcoded first
+  if (AVAILABLE_CHARACTERS.some(char => char.config_id === configId)) {
+    return true;
+  }
+  
+  // Check database
+  try {
+    if (process.env.DATABASE_URL) {
+      const { getCharacterFromDatabase } = await import('../services/database');
+      const dbChar = await getCharacterFromDatabase(configId);
+      return dbChar !== null;
+    }
+  } catch (error) {
+    console.warn('[characterExists] Could not check database:', error);
+  }
+  
+  return false;
 }
 
 /**
  * Get a specific character definition by ID (including hidden characters)
  * Returns null if character doesn't exist
+ * Checks database first, then falls back to hardcoded
  */
-export function getCharacterById(configId: string): CharacterDefinition | null {
+export async function getCharacterById(configId: string): Promise<CharacterDefinition | null> {
+  // Check database first (database takes precedence)
+  try {
+    if (process.env.DATABASE_URL) {
+      const { getCharacterFromDatabase } = await import('../services/database');
+      const dbChar = await getCharacterFromDatabase(configId);
+      if (dbChar) {
+        return {
+          config_id: dbChar.config_id,
+          name: dbChar.name || undefined,
+          description: dbChar.description || undefined,
+          display_order: dbChar.display_order || undefined,
+          avatar_url: dbChar.avatar_url || undefined,
+          hidden: dbChar.hidden || false,
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('[getCharacterById] Could not check database:', error);
+  }
+  
+  // Fall back to hardcoded
   return AVAILABLE_CHARACTERS.find(char => char.config_id === configId) || null;
 }
 

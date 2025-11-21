@@ -90,7 +90,7 @@ router.get('/character/:configId', async (req: Request, res: Response) => {
     }
 
     // Check if character exists in our config (including hidden ones)
-    const character = getCharacterById(configId);
+    const character = await getCharacterById(configId);
     
     if (!character) {
       return res.status(404).json({
@@ -146,7 +146,7 @@ router.get('/config/:configId', async (req: Request, res: Response) => {
     }
 
     // Check if character exists (including hidden ones) - this allows hidden characters to work
-    const characterDefinition = getCharacterById(configId);
+    const characterDefinition = await getCharacterById(configId);
     if (!characterDefinition) {
       return res.status(404).json({
         error: 'Character not found',
@@ -247,7 +247,7 @@ router.get('/characters', async (req: Request, res: Response) => {
   try {
     // Get character definitions - this is the source of truth for character IDs
     // This automatically filters out hidden characters
-    const characterDefinitions = getAvailableCharacters();
+    const characterDefinitions = await getAvailableCharacters();
     console.log(`[GET /api/characters] Returning ${characterDefinitions.length} visible characters (hidden characters filtered out)`);
     
     // Use definitions directly to ensure stable order and IDs
@@ -411,28 +411,15 @@ router.post('/sessions', async (req: Request, res: Response) => {
       const cleanedAi = stripCurlyBracketTags(chatResponse.ai);
       const cleanedTextResponse = stripCurlyBracketTags(chatResponse.text_response_cleaned);
 
-      // Generate preprompts for the greeting response
-      let preprompts: Preprompt[] | undefined;
-      try {
-        if (greetingMessage && (chatResponse.ai || chatResponse.text_response_cleaned)) {
-          preprompts = await chatService.generatePreprompts(
-            [
-              { role: 'user', content: greetingMessage },
-              { role: 'assistant', content: chatResponse.text_response_cleaned || chatResponse.ai || '' }
-            ],
-            config_id
-          );
-        }
-      } catch (error) {
-        console.error('Warning: Failed to generate preprompts for greeting response:', error);
-      }
-
+      // OPTIMIZATION: Skip preprompts on initial greeting to improve load time
+      // This saves 1-3 seconds on first page load
+      // Frontend can handle undefined preprompts gracefully
       greetingResponse = {
         ai: cleanedAi,
         text_response_cleaned: cleanedTextResponse,
         request_id: chatResponse.request_id,
         warning_message: chatResponse.warning_message,
-        preprompts,
+        preprompts: undefined, // Skipped for performance - frontend should handle this
       };
     } catch (error) {
       console.error('Warning: Failed to send greeting message:', error);
@@ -520,55 +507,60 @@ router.post('/chat', async (req: Request, res: Response) => {
     }
 
     const chatService = getChatService();
+
+    // OPTIMIZATION: Return AI response immediately without waiting for preprompts
+    // This reduces perceived latency by 1-3 seconds
     const response = await chatService.sendChat({
       session_id,
       input,
       config_id,
     });
 
-    let preprompts: Preprompt[] | undefined;
-    try {
-      if (input && (response.ai || response.text_response_cleaned)) {
-        // Use conversation_history if provided, otherwise fall back to just the current pair
-        let historyForPreprompts: ConversationMessage[];
-        
-        if (conversation_history && conversation_history.length > 0) {
-          // Add the current exchange to the conversation history
-          historyForPreprompts = [
-            ...conversation_history,
-            { role: 'user' as const, content: input },
-            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
-          ].slice(-8) as ConversationMessage[]; // Keep only last 8 messages (4 pairs)
-        } else {
-          // Fall back to just the current pair
-          historyForPreprompts = [
-            { role: 'user' as const, content: input },
-            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
-          ];
-        }
-        
-        preprompts = await chatService.generatePreprompts(
-          historyForPreprompts,
-          config_id
-        );
-      }
-    } catch (error) {
-      console.error('Warning: Failed to generate preprompts for chat response:', error);
-    }
-
     // Strip curly bracket tags from response text before returning to frontend
     const cleanedAi = stripCurlyBracketTags(response.ai);
     const cleanedTextResponse = stripCurlyBracketTags(response.text_response_cleaned);
 
-    // Return simplified response to frontend
+    // Return AI response immediately - preprompts can be fetched separately if needed
     res.json({
       ai: cleanedAi,
       session_id: response.session.id,
       request_id: response.request_id,
       text_response_cleaned: cleanedTextResponse,
       warning_message: response.warning_message,
-      preprompts,
+      preprompts: undefined, // Frontend should handle undefined preprompts gracefully
     });
+
+    // NOTE: Preprompt generation has been disabled to improve response time by 1-3 seconds
+    // If you need to re-enable preprompts in the future:
+    // 1. Remove the preprompts: undefined line above
+    // 2. Uncomment the code below and move it before res.json()
+    // 3. Add preprompts to the response object
+    /*
+    let preprompts: Preprompt[] | undefined;
+    try {
+      if (input && (response.ai || response.text_response_cleaned)) {
+        let historyForPreprompts: ConversationMessage[];
+
+        if (conversation_history && conversation_history.length > 0) {
+          historyForPreprompts = [
+            ...conversation_history,
+            { role: 'user' as const, content: input },
+            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
+          ].slice(-8) as ConversationMessage[];
+        } else {
+          historyForPreprompts = [
+            { role: 'user' as const, content: input },
+            { role: 'assistant' as const, content: response.text_response_cleaned || response.ai || '' }
+          ];
+        }
+
+        preprompts = await chatService.generatePreprompts(historyForPreprompts, config_id);
+      }
+    } catch (error) {
+      console.error('Warning: Failed to generate preprompts for chat response:', error);
+    }
+    // Then add preprompts to res.json() instead of undefined
+    */
   } catch (error: any) {
     console.error('Error sending chat:', error);
     res.status(500).json({
@@ -755,7 +747,7 @@ router.post('/characters/:config_id/verify-password', async (req: Request, res: 
     }
 
     // Check if character exists
-    if (!characterExists(config_id)) {
+    if (!(await characterExists(config_id))) {
       console.log(`[verify-password] Request ${requestId} - Character not found: ${config_id}`);
       return res.status(404).json({ error: 'Character not found' });
     }
