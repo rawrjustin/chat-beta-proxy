@@ -672,6 +672,20 @@ export class ChatService {
       });
 
       const sanitized = parsed.preprompts
+        .map((item) => {
+          // Normalize type to lowercase for comparison
+          if (item && typeof item.type === 'string') {
+            const normalizedType = item.type.toLowerCase();
+            // Only normalize if it's a valid type
+            if (normalizedType === 'roleplay' || normalizedType === 'conversation') {
+              return {
+                ...item,
+                type: normalizedType as 'roleplay' | 'conversation',
+              };
+            }
+          }
+          return item;
+        })
         .filter(
           (item): item is Preprompt =>
             item != null &&
@@ -681,15 +695,17 @@ export class ChatService {
         )
         .slice(0, 4);
 
-      // Log what was filtered out
+      // Log what was filtered out (using same normalization logic)
       const filteredOut = parsed.preprompts.filter(
-        (item) =>
-          !(
+        (item) => {
+          const normalizedType = item?.type?.toLowerCase();
+          return !(
             item != null &&
-            (item.type === 'roleplay' || item.type === 'conversation') &&
+            (normalizedType === 'roleplay' || normalizedType === 'conversation') &&
             typeof item.prompt === 'string' &&
             typeof item.simplified_text === 'string'
-          )
+          );
+        }
       );
 
       if (filteredOut.length > 0) {
