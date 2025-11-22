@@ -9,16 +9,28 @@ const router = Router();
 
 /**
  * In-memory cache for preprompts
- * Key: request_id, Value: { preprompts, timestamp }
+ * Key: request_id, Value: { preprompts, timestamp, status }
  * Preprompts expire after 5 minutes
  */
 interface PrepromptCacheEntry {
-  preprompts: Preprompt[];
+  preprompts: Preprompt[] | null; // null means "generating"
   timestamp: number;
+  status: 'generating' | 'ready';
 }
 
 const prepromptCache = new Map<string, PrepromptCacheEntry>();
 const PREPROMPT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Mark preprompts as generating (to prevent race condition)
+ */
+function markPrepromptsGenerating(requestId: string): void {
+  prepromptCache.set(requestId, {
+    preprompts: null,
+    timestamp: Date.now(),
+    status: 'generating'
+  });
+}
 
 /**
  * Store preprompts in cache
@@ -26,7 +38,8 @@ const PREPROMPT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 function storePreprompts(requestId: string, preprompts: Preprompt[]): void {
   prepromptCache.set(requestId, {
     preprompts,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    status: 'ready'
   });
 
   // Clean up old entries (simple cleanup on write)
@@ -50,6 +63,11 @@ function getPreprompts(requestId: string): Preprompt[] | null {
   // Check if expired
   if (Date.now() - entry.timestamp > PREPROMPT_CACHE_TTL) {
     prepromptCache.delete(requestId);
+    return null;
+  }
+
+  // Return null if still generating (triggers 202 response)
+  if (entry.status === 'generating') {
     return null;
   }
 
@@ -460,6 +478,11 @@ router.post('/sessions', async (req: Request, res: Response) => {
       const cleanedAi = stripCurlyBracketTags(chatResponse.ai);
       const cleanedTextResponse = stripCurlyBracketTags(chatResponse.text_response_cleaned);
 
+      // Mark preprompts as generating BEFORE returning response (fixes race condition)
+      if ((chatResponse.ai || chatResponse.text_response_cleaned) && chatResponse.request_id) {
+        markPrepromptsGenerating(chatResponse.request_id);
+      }
+
       greetingResponse = {
         ai: cleanedAi,
         text_response_cleaned: cleanedTextResponse,
@@ -588,6 +611,11 @@ router.post('/chat', async (req: Request, res: Response) => {
     // Strip curly bracket tags from response text before returning to frontend
     const cleanedAi = stripCurlyBracketTags(response.ai);
     const cleanedTextResponse = stripCurlyBracketTags(response.text_response_cleaned);
+
+    // Mark preprompts as generating BEFORE returning response (fixes race condition)
+    if (input && (response.ai || response.text_response_cleaned) && response.request_id) {
+      markPrepromptsGenerating(response.request_id);
+    }
 
     // Return AI response immediately with null preprompts
     // Frontend can fetch preprompts separately via GET /api/preprompts/:request_id
