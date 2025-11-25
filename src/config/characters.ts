@@ -301,6 +301,24 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 36,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_49c3c1ef-f0b0-4c9d-b2a3-f4e892a41623',
+    name: 'Alix',
+    description: 'Alix',
+    display_order: 37,
+  },
+  {
+    config_id: 'CHAR_78923210-3c50-49a3-b9cc-efdedab1e667',
+    name: 'Shaq',
+    description: 'Shaq',
+    display_order: 38,
+  },
+  {
+    config_id: 'CHAR_6a995488-71ea-4b6e-bb13-4bc4d69dbab8',
+    name: 'Jake Paul v2',
+    description: 'Jake Paul v2',
+    display_order: 39,
+  },
 ];
 
 /**
