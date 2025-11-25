@@ -322,6 +322,34 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 39,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_08231070-6d78-49fc-b223-3c8dc91b66ec',
+    name: 'Jake Paul v2 (Deepseek)',
+    description: 'Jake Paul v2 Updated Scene (DeepSeek)',
+    display_order: 40,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_59221ea1-1573-4a72-9c0d-09892679c6a5',
+    name: 'Alix Earle (Deepseek)',
+    description: 'Alix Earle (DeepSeek)',
+    display_order: 41,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_76b43918-2d29-4f05-9f87-6637d5b9cadc',
+    name: 'Shaq (Deepseek)',
+    description: 'Shaq (DeepSeek)',
+    display_order: 42,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_f78c5cf7-1969-4705-b7b5-dca86935b80d',
+    name: 'Paris Hilton (Deepseek)',
+    description: 'Paris Hilton (DeepSeek)',
+    display_order: 43,
+    hidden: true,
+  },
 ];
 
 /**
