@@ -299,6 +299,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Paris Hilton',
     description: 'Hiding from Paparazzi',
     display_order: 36,
+    hidden: true,
   },
 ];
 
