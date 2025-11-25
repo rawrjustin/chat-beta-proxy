@@ -306,18 +306,21 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'Alix',
     description: 'Alix',
     display_order: 37,
+    hidden: true,
   },
   {
     config_id: 'CHAR_78923210-3c50-49a3-b9cc-efdedab1e667',
     name: 'Shaq',
     description: 'Shaq',
     display_order: 38,
+    hidden: true,
   },
   {
     config_id: 'CHAR_6a995488-71ea-4b6e-bb13-4bc4d69dbab8',
     name: 'Jake Paul v2',
     description: 'Jake Paul v2',
     display_order: 39,
+    hidden: true,
   },
 ];
 
