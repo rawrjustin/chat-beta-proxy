@@ -4,6 +4,7 @@ import { ProxyChatRequest, CreateSessionRequest, GetConfigsRequest, FollowUpsReq
 import { getAvailableCharacters, getAvailableCharacterIds, getCharacterById, characterExists } from '../config/characters';
 import { stripCurlyBracketTags } from '../utils/textUtils';
 import { getPasswordService } from '../services/passwordService';
+import { trackChatSent } from '../services/mixpanelService';
 
 const router = Router();
 
@@ -617,11 +618,22 @@ router.post('/chat', async (req: Request, res: Response) => {
       markPrepromptsGenerating(response.request_id);
     }
 
+    // Track "Chat Sent" event in Mixpanel (only for user-initiated messages, not automatic initial messages)
+    // This endpoint is only called for user-initiated chat messages, not automatic greetings
+    const finalSessionId = response.session.id;
+    trackChatSent({
+      session_id: finalSessionId,
+      config_id: config_id,
+      input_length: input.length,
+      has_conversation_history: !!conversation_history && conversation_history.length > 0,
+      conversation_history_length: conversation_history?.length || 0,
+    });
+
     // Return AI response immediately with null preprompts
     // Frontend can fetch preprompts separately via GET /api/preprompts/:request_id
     res.json({
       ai: cleanedAi,
-      session_id: response.session.id,
+      session_id: finalSessionId,
       request_id: response.request_id,
       text_response_cleaned: cleanedTextResponse,
       warning_message: response.warning_message,

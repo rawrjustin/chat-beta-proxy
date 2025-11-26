@@ -9,6 +9,7 @@ import { requestLogger, errorHandler } from './middleware/logger';
 import { initChatService } from './services/chatService';
 import { TokenRefreshService } from './services/tokenRefreshService';
 import { getUserFromToken } from './utils/tokenUtils';
+import { initMixpanel } from './services/mixpanelService';
 
 // Load environment variables
 dotenv.config();
@@ -76,6 +77,9 @@ if (REFRESH_TOKEN) {
 
 // Initialize chat service with token refresh service
 initChatService(tokenRefreshService);
+
+// Initialize Mixpanel
+initMixpanel();
 
 // Initialize database (if DATABASE_URL is available)
 async function initializeDatabase() {
