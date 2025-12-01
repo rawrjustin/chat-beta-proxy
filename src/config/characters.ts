@@ -350,6 +350,20 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 43,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_9c12bb0a-ed32-4955-94b8-c6813bf028c4',
+    name: 'Paris Hilton v2',
+    description: 'Paris Hilton v2',
+    display_order: 44,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_a38f9302-b215-49e2-944e-15d7d7982ff6',
+    name: 'Shaq v2',
+    description: 'Shaq v2',
+    display_order: 45,
+    hidden: true,
+  },
 ];
 
 /**
