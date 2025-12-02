@@ -371,6 +371,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 46,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_6bf9d10f-5906-4c0a-9770-d2b9f1466ce8',
+    name: '24kGoldn',
+    description: '24kGoldn',
+    display_order: 47,
+    hidden: true,
+  },
 ];
 
 /**
