@@ -364,6 +364,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 45,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_7a5a11da-0ad2-41b8-9adc-3203e59b7f62',
+    name: 'Justine Skye',
+    description: 'Justine Skye',
+    display_order: 46,
+    hidden: true,
+  },
 ];
 
 /**
