@@ -378,6 +378,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 47,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_891ffd4c-a9fd-428d-a2d4-315e378a9fd8',
+    name: 'River v2 (ads)',
+    description: 'River v2 (ads/shortened version)',
+    display_order: 48,
+    hidden: true,
+  },
 ];
 
 /**
