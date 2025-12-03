@@ -374,7 +374,7 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
   {
     config_id: 'CHAR_6bf9d10f-5906-4c0a-9770-d2b9f1466ce8',
     name: '24kGoldn',
-    description: '24kGoldn',
+    description: '24kGoldn scene 1',
     display_order: 47,
     hidden: true,
   },
@@ -383,6 +383,34 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     name: 'River v2 (ads)',
     description: 'River v2 (ads/shortened version)',
     display_order: 48,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_98c2eef9-be02-417a-a561-8e3c408d9e89',
+    name: '24kGoldn v2',
+    description: '24kGoldn scene 2',
+    display_order: 49,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_6a6697a0-79b3-4c95-92d5-308d2ea68d44',
+    name: '24kGoldn v3',
+    description: '24kGoldn scene 3',
+    display_order: 50,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_4df3f954-33c1-4758-b961-fb131ad35558',
+    name: '24kGoldn v4',
+    description: '24kGoldn scene 4',
+    display_order: 51,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_e8c17a5b-b9ed-4ea0-a5e1-1fceb92c9637',
+    name: '24kGoldn v5',
+    description: '24kGoldn scene 5',
+    display_order: 52,
     hidden: true,
   },
 ];
