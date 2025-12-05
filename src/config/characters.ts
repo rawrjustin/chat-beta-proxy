@@ -413,6 +413,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 52,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_d09c8645-e9e5-478d-8697-42656bb8d6c3',
+    name: 'River v2',
+    description: 'River v2, cleaned up v1 inconsistencies and geared towards 18 plus new safety considerations',
+    display_order: 53,
+    hidden: true,
+  },
 ];
 
 /**
