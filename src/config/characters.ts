@@ -420,6 +420,13 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 53,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_6f96dc55-f7be-4704-91fb-eb1f62349622',
+    name: 'Solo',
+    description: 'Solo',
+    display_order: 54,
+    hidden: true,
+  },
 ];
 
 /**
