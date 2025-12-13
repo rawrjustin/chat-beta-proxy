@@ -434,6 +434,20 @@ export const AVAILABLE_CHARACTERS: CharacterDefinition[] = [
     display_order: 55,
     hidden: true,
   },
+  {
+    config_id: 'CHAR_3c2bd68c-427d-40d2-af0e-568a6c035e42',
+    name: 'Miles',
+    description: 'Miles, the performative male',
+    display_order: 56,
+    hidden: true,
+  },
+  {
+    config_id: 'CHAR_dcd9f103-1fe6-489d-9d55-f73fbd231fdc',
+    name: 'Solo (safe version)',
+    description: 'Solo, safe version',
+    display_order: 57,
+    hidden: true,
+  },
 ];
 
 /**
